@@ -493,19 +493,35 @@ export default class BattleScene extends Phaser.Scene {
     this.messageText.setText('');
     this.continueIndicator.setAlpha(0);
 
-    // Typewriter effect
+    // Clean up any previous input handlers
+    this.input.keyboard.removeAllListeners('keydown-Z');
+    this.input.keyboard.removeAllListeners('keydown-SPACE');
+
+    let typingDone = false;
     let charIndex = 0;
+
+    const finishTyping = () => {
+      if (typingDone) return;
+      typingDone = true;
+      if (typeTimer) typeTimer.destroy();
+      this.messageText.setText(text);
+      this.continueIndicator.setAlpha(1);
+      // Wait a frame then listen for advance
+      this.time.delayedCall(150, () => {
+        this._waitForInput(() => {
+          if (onComplete) onComplete();
+        });
+      });
+    };
+
+    // Typewriter effect
     const typeTimer = this.time.addEvent({
       delay: 30,
       callback: () => {
         charIndex++;
         this.messageText.setText(text.substring(0, charIndex));
         if (charIndex >= text.length) {
-          typeTimer.destroy();
-          this.continueIndicator.setAlpha(1);
-          this._waitForInput(() => {
-            if (onComplete) onComplete();
-          });
+          finishTyping();
         }
       },
       repeat: text.length - 1,
@@ -513,31 +529,24 @@ export default class BattleScene extends Phaser.Scene {
 
     // Allow skipping typewriter
     this.input.keyboard.once('keydown-Z', () => {
-      if (charIndex < text.length) {
-        typeTimer.destroy();
-        this.messageText.setText(text);
-        this.continueIndicator.setAlpha(1);
-      }
+      if (!typingDone) finishTyping();
     });
     this.input.keyboard.once('keydown-SPACE', () => {
-      if (charIndex < text.length) {
-        typeTimer.destroy();
-        this.messageText.setText(text);
-        this.continueIndicator.setAlpha(1);
-      }
+      if (!typingDone) finishTyping();
     });
   }
 
   _waitForInput(callback) {
+    this.input.keyboard.removeAllListeners('keydown-Z');
+    this.input.keyboard.removeAllListeners('keydown-SPACE');
+
     const handler = () => {
-      this.input.keyboard.off('keydown-Z', handler);
-      this.input.keyboard.off('keydown-SPACE', handler);
+      this.input.keyboard.removeAllListeners('keydown-Z');
+      this.input.keyboard.removeAllListeners('keydown-SPACE');
       callback();
     };
-    this.time.delayedCall(100, () => {
-      this.input.keyboard.once('keydown-Z', handler);
-      this.input.keyboard.once('keydown-SPACE', handler);
-    });
+    this.input.keyboard.once('keydown-Z', handler);
+    this.input.keyboard.once('keydown-SPACE', handler);
   }
 
   _showActionMenu() {

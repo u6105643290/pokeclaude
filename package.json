@@ -13,14 +13,15 @@
     "node": "hardhat node"
   },
   "dependencies": {
-    "phaser": "^3.80.0",
+    "@openzeppelin/contracts": "^5.0.0",
     "ethers": "^6.11.0",
-    "@openzeppelin/contracts": "^5.0.0"
+    "phaser": "^3.80.0"
   },
   "devDependencies": {
-    "vite": "^5.4.0",
-    "hardhat": "^2.22.0",
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
-    "dotenv": "^16.4.0"
+    "dotenv": "^16.4.0",
+    "gh-pages": "^6.3.0",
+    "hardhat": "^2.22.0",
+    "vite": "^5.4.0"
   }
 }

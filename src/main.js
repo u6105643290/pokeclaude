@@ -9,8 +9,8 @@ import InventoryScene from './scenes/InventoryScene.js';
 
 const config = {
   type: Phaser.AUTO,
-  width: 800,
-  height: 600,
+  width: window.innerWidth,
+  height: window.innerHeight,
   parent: 'game-container',
   pixelArt: true,
   roundPixels: true,
@@ -23,8 +23,9 @@ const config = {
     },
   },
   scale: {
-    mode: Phaser.Scale.FIT,
+    mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
+    expandParent: true,
   },
   scene: [BootScene, MenuScene, WorldScene, BattleScene, InventoryScene],
 };

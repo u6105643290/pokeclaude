@@ -11,78 +11,17 @@
 
     body {
       background: #0a0a1a;
-      color: #e0e0e0;
-      font-family: 'Press Start 2P', monospace;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
-      overflow-x: hidden;
-    }
-
-    /* Header bar */
-    #header {
-      width: 100%;
-      max-width: 840px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 12px 20px;
-      background: linear-gradient(90deg, #1a0a2e, #0a0a1a);
-      border-bottom: 2px solid #627EEA;
-    }
-
-    #header .logo {
-      font-size: 14px;
-      color: #F7931A;
-      text-shadow: 0 0 8px #F7931A88;
-    }
-
-    #wallet-area {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    #wallet-address {
-      font-size: 8px;
-      color: #627EEA;
-      max-width: 120px;
+      margin: 0;
+      padding: 0;
       overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    #connect-btn {
+      width: 100vw;
+      height: 100vh;
       font-family: 'Press Start 2P', monospace;
-      font-size: 8px;
-      padding: 8px 16px;
-      background: linear-gradient(135deg, #627EEA, #4A6BC5);
-      color: white;
-      border: none;
-      cursor: pointer;
-      border-radius: 4px;
-      text-transform: uppercase;
-      transition: all 0.2s;
     }
 
-    #connect-btn:hover {
-      background: linear-gradient(135deg, #7B93F0, #627EEA);
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px #627EEA55;
-    }
-
-    #connect-btn.connected {
-      background: linear-gradient(135deg, #00D1B2, #00A88E);
-    }
-
-    /* Game container */
     #game-container {
-      margin-top: 10px;
-      border: 3px solid #627EEA;
-      border-radius: 4px;
-      box-shadow: 0 0 30px #627EEA33, inset 0 0 30px #00000055;
-      position: relative;
+      width: 100%;
+      height: 100%;
     }
 
     /* Loading screen */
@@ -135,30 +74,6 @@
       0%, 100% { opacity: 1; }
       50% { opacity: 0.6; }
     }
-
-    /* Footer */
-    #footer {
-      margin-top: 10px;
-      padding: 10px;
-      font-size: 7px;
-      color: #555;
-      text-align: center;
-    }
-
-    #footer a {
-      color: #627EEA;
-      text-decoration: none;
-    }
-
-    /* Controls help */
-    #controls {
-      margin-top: 8px;
-      font-size: 7px;
-      color: #666;
-      text-align: center;
-      max-width: 800px;
-      line-height: 1.8;
-    }
   </style>
 </head>
 <body>
@@ -169,51 +84,10 @@
     <div class="load-text">Initializing CryptoVerse...</div>
   </div>
 
-  <!-- Header -->
-  <div id="header">
-    <div class="logo">PokeClaude</div>
-    <div id="wallet-area">
-      <span id="wallet-address"></span>
-      <button id="connect-btn" onclick="connectWallet()">Connect Wallet</button>
-    </div>
-  </div>
-
   <!-- Game canvas mounts here -->
   <div id="game-container"></div>
 
-  <!-- Controls -->
-  <div id="controls">
-    WASD / Arrow Keys: Move &nbsp;|&nbsp; SPACE / Z: Interact &nbsp;|&nbsp; X: Cancel &nbsp;|&nbsp; I: Inventory &nbsp;|&nbsp; ESC: Menu
-  </div>
-
-  <!-- Footer -->
-  <div id="footer">
-    PokeClaude v0.1.0 &mdash; Built on Polygon &mdash;
-    <a href="https://github.com/u6105643290/pokeclaude" target="_blank">GitHub</a>
-  </div>
-
   <script>
-    // Wallet connection handler (called before game modules load)
-    async function connectWallet() {
-      if (typeof window.ethereum === 'undefined') {
-        alert('Please install MetaMask to connect your wallet!');
-        return;
-      }
-      try {
-        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-        const addr = accounts[0];
-        document.getElementById('wallet-address').textContent =
-          addr.slice(0, 6) + '...' + addr.slice(-4);
-        const btn = document.getElementById('connect-btn');
-        btn.textContent = 'Connected';
-        btn.classList.add('connected');
-        window.__walletAddress = addr;
-        window.dispatchEvent(new CustomEvent('walletConnected', { detail: { address: addr } }));
-      } catch (err) {
-        console.error('Wallet connection failed:', err);
-      }
-    }
-
     // Hide loading screen once the game is ready
     window.addEventListener('gameReady', () => {
       document.getElementById('loading-screen').classList.add('hidden');
