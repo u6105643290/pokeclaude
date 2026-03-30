@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PokeClaude - Crypto Creature RPG</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0a0a1a;
+      color: #e0e0e0;
+      font-family: 'Press Start 2P', monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Header bar */
+    #header {
+      width: 100%;
+      max-width: 840px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 20px;
+      background: linear-gradient(90deg, #1a0a2e, #0a0a1a);
+      border-bottom: 2px solid #627EEA;
+    }
+
+    #header .logo {
+      font-size: 14px;
+      color: #F7931A;
+      text-shadow: 0 0 8px #F7931A88;
+    }
+
+    #wallet-area {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #wallet-address {
+      font-size: 8px;
+      color: #627EEA;
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #connect-btn {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 8px;
+      padding: 8px 16px;
+      background: linear-gradient(135deg, #627EEA, #4A6BC5);
+      color: white;
+      border: none;
+      cursor: pointer;
+      border-radius: 4px;
+      text-transform: uppercase;
+      transition: all 0.2s;
+    }
+
+    #connect-btn:hover {
+      background: linear-gradient(135deg, #7B93F0, #627EEA);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px #627EEA55;
+    }
+
+    #connect-btn.connected {
+      background: linear-gradient(135deg, #00D1B2, #00A88E);
+    }
+
+    /* Game container */
+    #game-container {
+      margin-top: 10px;
+      border: 3px solid #627EEA;
+      border-radius: 4px;
+      box-shadow: 0 0 30px #627EEA33, inset 0 0 30px #00000055;
+      position: relative;
+    }
+
+    /* Loading screen */
+    #loading-screen {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: #0a0a1a;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      transition: opacity 0.5s;
+    }
+
+    #loading-screen.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #loading-screen .title {
+      font-size: 24px;
+      color: #F7931A;
+      text-shadow: 0 0 20px #F7931A88;
+      margin-bottom: 30px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    #loading-screen .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid #333;
+      border-top-color: #627EEA;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    #loading-screen .load-text {
+      margin-top: 20px;
+      font-size: 10px;
+      color: #888;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    /* Footer */
+    #footer {
+      margin-top: 10px;
+      padding: 10px;
+      font-size: 7px;
+      color: #555;
+      text-align: center;
+    }
+
+    #footer a {
+      color: #627EEA;
+      text-decoration: none;
+    }
+
+    /* Controls help */
+    #controls {
+      margin-top: 8px;
+      font-size: 7px;
+      color: #666;
+      text-align: center;
+      max-width: 800px;
+      line-height: 1.8;
+    }
+  </style>
+</head>
+<body>
+  <!-- Loading screen -->
+  <div id="loading-screen">
+    <div class="title">PokeClaude</div>
+    <div class="spinner"></div>
+    <div class="load-text">Initializing CryptoVerse...</div>
+  </div>
+
+  <!-- Header -->
+  <div id="header">
+    <div class="logo">PokeClaude</div>
+    <div id="wallet-area">
+      <span id="wallet-address"></span>
+      <button id="connect-btn" onclick="connectWallet()">Connect Wallet</button>
+    </div>
+  </div>
+
+  <!-- Game canvas mounts here -->
+  <div id="game-container"></div>
+
+  <!-- Controls -->
+  <div id="controls">
+    WASD / Arrow Keys: Move &nbsp;|&nbsp; SPACE / Z: Interact &nbsp;|&nbsp; X: Cancel &nbsp;|&nbsp; I: Inventory &nbsp;|&nbsp; ESC: Menu
+  </div>
+
+  <!-- Footer -->
+  <div id="footer">
+    PokeClaude v0.1.0 &mdash; Built on Polygon &mdash;
+    <a href="https://github.com/u6105643290/pokeclaude" target="_blank">GitHub</a>
+  </div>
+
+  <script>
+    // Wallet connection handler (called before game modules load)
+    async function connectWallet() {
+      if (typeof window.ethereum === 'undefined') {
+        alert('Please install MetaMask to connect your wallet!');
+        return;
+      }
+      try {
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        const addr = accounts[0];
+        document.getElementById('wallet-address').textContent =
+          addr.slice(0, 6) + '...' + addr.slice(-4);
+        const btn = document.getElementById('connect-btn');
+        btn.textContent = 'Connected';
+        btn.classList.add('connected');
+        window.__walletAddress = addr;
+        window.dispatchEvent(new CustomEvent('walletConnected', { detail: { address: addr } }));
+      } catch (err) {
+        console.error('Wallet connection failed:', err);
+      }
+    }
+
+    // Hide loading screen once the game is ready
+    window.addEventListener('gameReady', () => {
+      document.getElementById('loading-screen').classList.add('hidden');
+    });
+  </script>
+
+  <!-- Game entry point -->
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

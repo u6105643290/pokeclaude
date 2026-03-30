@@ -1,0 +1,26 @@
+{
+  "name": "pokeclaude",
+  "version": "0.1.0",
+  "description": "PokeClaude - A Web3 crypto-themed creature collection RPG",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "deploy:polygon": "hardhat run scripts/deploy.js --network polygon",
+    "node": "hardhat node"
+  },
+  "dependencies": {
+    "phaser": "^3.80.0",
+    "ethers": "^6.11.0",
+    "@openzeppelin/contracts": "^5.0.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0",
+    "hardhat": "^2.22.0",
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "dotenv": "^16.4.0"
+  }
+}
