@@ -71,76 +71,63 @@ export default class BattleScene extends Phaser.Scene {
   // === DRAWING ===
 
   _drawBackground(w, h) {
-    const bg = this.add.graphics();
-    // Battle arena gradient
-    bg.fillGradientStyle(0x1a2a1a, 0x1a2a1a, 0x0a1a0a, 0x0a1a0a);
-    bg.fillRect(0, 0, w, h * 0.65);
+    // Use the pre-rendered battle background if available
+    if (this.textures.exists('battle_bg')) {
+      this.add.image(w / 2, h * 0.325, 'battle_bg')
+        .setDisplaySize(w, h * 0.65)
+        .setOrigin(0.5, 0.5);
+    } else {
+      const bg = this.add.graphics();
+      bg.fillGradientStyle(0x87CEEB, 0x87CEEB, 0x4CAF50, 0x4CAF50);
+      bg.fillRect(0, 0, w, h * 0.65);
+    }
 
     // Ground platform for player side
-    bg.fillStyle(0x3a5a3a, 1);
-    bg.fillEllipse(200, h * 0.52, 280, 60);
+    const platforms = this.add.graphics();
+    platforms.fillStyle(0x66BB6A, 1);
+    platforms.fillEllipse(w * 0.25, h * 0.52, 280, 60);
+    platforms.fillStyle(0x4CAF50, 1);
+    platforms.fillEllipse(w * 0.25, h * 0.515, 260, 48);
 
     // Ground platform for enemy side
-    bg.fillStyle(0x3a5a3a, 1);
-    bg.fillEllipse(600, h * 0.32, 240, 50);
+    platforms.fillStyle(0x66BB6A, 1);
+    platforms.fillEllipse(w * 0.75, h * 0.32, 240, 50);
+    platforms.fillStyle(0x4CAF50, 1);
+    platforms.fillEllipse(w * 0.75, h * 0.315, 220, 40);
 
     // Lower panel background
-    bg.fillStyle(0x111111, 1);
-    bg.fillRect(0, h * 0.65, w, h * 0.35);
-
-    bg.lineStyle(2, 0x333333, 1);
-    bg.lineBetween(0, h * 0.65, w, h * 0.65);
+    platforms.fillStyle(0x111111, 1);
+    platforms.fillRect(0, h * 0.65, w, h * 0.35);
+    platforms.lineStyle(2, 0x333333, 1);
+    platforms.lineBetween(0, h * 0.65, w, h * 0.65);
   }
 
   _drawCreatures(w, h) {
-    const pColor = this._getCreatureColor(this.playerCreature);
-    const eColor = this._getCreatureColor(this.enemyCreature);
+    const pId = this.playerCreature.id;
+    const eId = this.enemyCreature.id;
 
-    // Player creature (left, bottom) - back sprite (slightly larger)
-    this.playerSprite = this.add.graphics();
-    this.playerSprite.fillStyle(pColor, 1);
-    this.playerSprite.fillRoundedRect(-40, -50, 80, 80, 12);
-    this.playerSprite.lineStyle(2, 0xffffff, 0.3);
-    this.playerSprite.strokeRoundedRect(-40, -50, 80, 80, 12);
-    // Eyes (from behind, so no eyes visible - add pattern)
-    this.playerSprite.fillStyle(Phaser.Display.Color.IntegerToColor(pColor).darken(30).color, 1);
-    this.playerSprite.fillCircle(0, -20, 12);
-    this.playerSprite.x = 170;
-    this.playerSprite.y = h * 0.48;
-    this.playerSprite.setDepth(5);
+    // Player creature (left, bottom) - back sprite (larger, scaled up)
+    const pBackKey = this.textures.exists(`${pId}_back`) ? `${pId}_back` : pId;
+    this.playerSprite = this.add.image(170, h * 0.46, pBackKey)
+      .setScale(2.5)
+      .setDepth(5)
+      .setOrigin(0.5, 1);
 
     // Add name label below player creature
-    this.playerNameLabel = this.add.text(170, h * 0.58, this.playerCreature.name, {
+    this.playerNameLabel = this.add.text(170, h * 0.48, this.playerCreature.name, {
       fontSize: '10px', fontFamily: '"Press Start 2P", monospace', color: '#ffffff',
     }).setOrigin(0.5).setDepth(5);
 
-    // Enemy creature (right, top) - front sprite
-    this.enemySprite = this.add.graphics();
-    this.enemySprite.fillStyle(eColor, 1);
-    this.enemySprite.fillRoundedRect(-30, -40, 60, 65, 10);
-    this.enemySprite.lineStyle(2, 0xffffff, 0.3);
-    this.enemySprite.strokeRoundedRect(-30, -40, 60, 65, 10);
-    // Eyes
-    this.enemySprite.fillStyle(0xffffff, 1);
-    this.enemySprite.fillCircle(-12, -18, 6);
-    this.enemySprite.fillCircle(12, -18, 6);
-    this.enemySprite.fillStyle(0x111111, 1);
-    this.enemySprite.fillCircle(-10, -17, 3);
-    this.enemySprite.fillCircle(14, -17, 3);
-    this.enemySprite.x = 600;
-    this.enemySprite.y = h * 0.26;
-    this.enemySprite.setDepth(5);
+    // Enemy creature (right, top) - front sprite (slightly smaller)
+    const eFrontKey = this.textures.exists(`${eId}_front`) ? `${eId}_front` : eId;
+    this.enemySprite = this.add.image(600, h * 0.28, eFrontKey)
+      .setScale(2)
+      .setDepth(5)
+      .setOrigin(0.5, 1);
 
     // Start off-screen for intro animation
     this.playerSprite.x = -100;
     this.enemySprite.x = w + 100;
-  }
-
-  _getCreatureColor(creature) {
-    if (creature.spriteColor) {
-      return parseInt(creature.spriteColor.replace('#', ''), 16);
-    }
-    return TYPE_COLORS[creature.type] || 0x888888;
   }
 
   _drawEnemyInfo(w, h) {
