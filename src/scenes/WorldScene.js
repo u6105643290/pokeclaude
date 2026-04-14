@@ -1,22 +1,16 @@
-// WorldScene - Top-down overworld with areas, NPCs, encounters
+// WorldScene - Top-down overworld with quest system, NPCs, trainer battles, encounters
 
 import { STARTERS, createCreatureInstance, getWildCreaturesForArea } from '../characters/creatures.js';
+import { TRAINERS } from '../data/quests.js';
+import { NPC_DATA, QUEST_NPCS } from '../data/npcs.js';
+import QuestManager from '../systems/QuestManager.js';
 import DialogBox from '../ui/DialogBox.js';
 import HUD from '../ui/HUD.js';
 
 // Map tile constants
 const T = {
-  GRASS: 0,
-  TALLGRASS: 1,
-  PATH: 2,
-  WATER: 3,
-  WALL: 4,
-  TREE: 5,
-  BUILDING: 6,
-  SAND: 7,
-  MOUNTAIN: 8,
-  LAB_FLOOR: 9,
-  SIGN: 10,
+  GRASS: 0, TALLGRASS: 1, PATH: 2, WATER: 3, WALL: 4,
+  TREE: 5, BUILDING: 6, SAND: 7, MOUNTAIN: 8, LAB_FLOOR: 9, SIGN: 10,
 };
 
 const TILE_TEXTURES = [
@@ -43,12 +37,16 @@ export default class WorldScene extends Phaser.Scene {
     // Player data
     this.playerData = this.initData.saveData || this._createNewGame();
 
+    // Quest manager
+    this.questManager = new QuestManager(this.playerData.questData || null);
+    if (this.playerData.hasStarter) {
+      this.questManager.checkForNewQuests();
+    }
+
     // Generate map
     this.mapData = this._generateWorldMap();
     this.mapWidth = this.mapData[0].length;
     this.mapHeight = this.mapData.length;
-
-    // Create tilemap from data
     this._renderMap();
 
     // Create player
@@ -69,7 +67,10 @@ export default class WorldScene extends Phaser.Scene {
 
     // NPCs
     this.npcs = this.physics.add.staticGroup();
+    this.npcObjects = [];
+    this.questNpcObjects = [];
     this._createNPCs();
+    this._refreshQuestNPCs();
 
     // Input
     this.cursors = this.input.keyboard.createCursorKeys();
@@ -81,6 +82,7 @@ export default class WorldScene extends Phaser.Scene {
     };
     this.interactKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.menuKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.I);
+    this.questKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
 
     // Dialog box
     this.dialogBox = new DialogBox(this);
@@ -88,27 +90,27 @@ export default class WorldScene extends Phaser.Scene {
     // HUD
     this.hud = new HUD(this);
 
-    // Movement state
-    this.isMoving = false;
+    // State
     this.inDialog = false;
     this.encounterCooldown = 0;
     this.stepCount = 0;
-
-    // Area tracking
     this.currentArea = this._getAreaForPosition(startX, startY);
+    this.questLogVisible = false;
 
     // If new game, show intro
     if (this.initData.newGame && !this.playerData.hasStarter) {
+      this.questManager.startGame();
       this.time.delayedCall(500, () => this._showStarterSelection());
     }
 
-    // Interact key handler
+    // Interact key
     this.interactKey.on('down', () => {
       if (this.inDialog) {
         this.dialogBox.handleInput('CONFIRM');
         return;
       }
-      this._checkNPCInteraction();
+      if (this.questLogVisible) return;
+      this._checkInteraction();
     });
 
     this.input.keyboard.on('keydown-UP', () => {
@@ -118,15 +120,25 @@ export default class WorldScene extends Phaser.Scene {
       if (this.inDialog) this.dialogBox.handleInput('DOWN');
     });
 
-    // Menu key
+    // Menu key - inventory
     this.menuKey.on('down', () => {
-      if (!this.inDialog) {
+      if (!this.inDialog && !this.questLogVisible) {
         this.scene.launch('InventoryScene', { playerData: this.playerData });
         this.scene.pause();
       }
     });
 
-    // Listen for return from battle
+    // Quest log key
+    this.questKey.on('down', () => {
+      if (this.inDialog) return;
+      if (this.questLogVisible) {
+        this._hideQuestLog();
+      } else {
+        this._showQuestLog();
+      }
+    });
+
+    // Return from battle
     this.events.on('wake', (sys, data) => {
       this.cameras.main.fadeIn(300, 0, 0, 0);
       if (data) {
@@ -135,17 +147,42 @@ export default class WorldScene extends Phaser.Scene {
         }
         if (data.captured) {
           this.playerData.party.push(data.captured);
+          this.questManager.onCreatureCaught(data.captured);
+          this.questManager.checkTypeDiversity(this.playerData.party, this.playerData.box);
+        }
+        if (data.evolved) {
+          this.questManager.onCreatureEvolved();
+        }
+        if (data.trainerDefeated) {
+          this.questManager.onTrainerDefeated(data.trainerDefeated);
+          this.questManager.tryAutoComplete();
+          this.questManager.checkForNewQuests();
+          this._refreshQuestNPCs();
+
+          // Show post-win trainer dialog
+          this.time.delayedCall(400, () => {
+            this._showTrainerPostBattleDialog(data.trainerDefeated, true);
+          });
+        }
+        if (data.trainerLost) {
+          this.time.delayedCall(400, () => {
+            this._showTrainerPostBattleDialog(data.trainerLost, false);
+          });
         }
       }
+      // Save quest data
+      this.playerData.questData = this.questManager.serialize();
+      this._saveGame();
+
+      // Show any quest notifications
+      this.time.delayedCall(600, () => this._showQuestNotifications());
     });
 
-    this.events.on('resume', () => {
-      // Return from inventory
-    });
+    this.events.on('resume', () => {});
   }
 
   update(time, delta) {
-    if (this.inDialog) {
+    if (this.inDialog || this.questLogVisible) {
       this.player.setVelocity(0, 0);
       return;
     }
@@ -153,29 +190,20 @@ export default class WorldScene extends Phaser.Scene {
     // Movement
     const speed = 160;
     let vx = 0, vy = 0;
-
     if (this.cursors.left.isDown || this.wasd.left.isDown) vx = -speed;
     else if (this.cursors.right.isDown || this.wasd.right.isDown) vx = speed;
     if (this.cursors.up.isDown || this.wasd.up.isDown) vy = -speed;
     else if (this.cursors.down.isDown || this.wasd.down.isDown) vy = speed;
 
-    // Normalize diagonal movement
-    if (vx !== 0 && vy !== 0) {
-      vx *= 0.707;
-      vy *= 0.707;
-    }
-
+    if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; }
     this.player.setVelocity(vx, vy);
-
-    // Check tile collision manually
     this._checkTileCollision();
 
-    // Track steps for encounters
+    // Steps & encounters
     if (vx !== 0 || vy !== 0) {
       this.stepCount++;
       if (this.encounterCooldown > 0) this.encounterCooldown--;
 
-      // Check for area change
       const tileX = Math.floor(this.player.x / TILE_SIZE);
       const tileY = Math.floor(this.player.y / TILE_SIZE);
       const newArea = this._getAreaForPosition(tileX, tileY);
@@ -183,15 +211,16 @@ export default class WorldScene extends Phaser.Scene {
         this.currentArea = newArea;
         this.hud.setArea(newArea);
         this._showAreaTransition(newArea);
+        this.questManager.onEnterArea(newArea);
+        this.questManager.tryAutoComplete();
       }
 
-      // Random encounter check
       if (this.stepCount % 8 === 0 && this.encounterCooldown <= 0) {
         this._checkRandomEncounter();
       }
     }
 
-    // Update HUD
+    // HUD
     this.hud.update({
       currentArea: this.currentArea,
       coins: this.playerData.coins,
@@ -200,8 +229,11 @@ export default class WorldScene extends Phaser.Scene {
       worldY: this.player.y,
       worldWidth: this.mapWidth * TILE_SIZE,
       worldHeight: this.mapHeight * TILE_SIZE,
+      questSummary: this.questManager.getActiveQuestSummary(),
     });
   }
+
+  // === NEW GAME ===
 
   _createNewGame() {
     return {
@@ -212,6 +244,9 @@ export default class WorldScene extends Phaser.Scene {
         cryptospheres: 10,
         premiumSpheres: 3,
         potions: 5,
+        superPotions: 0,
+        ultraSpheres: 0,
+        masterSpheres: 0,
         revives: 2,
       },
       coins: 100,
@@ -219,8 +254,11 @@ export default class WorldScene extends Phaser.Scene {
       hasStarter: false,
       x: 25,
       y: 45,
+      questData: null,
     };
   }
+
+  // === STARTER SELECTION ===
 
   async _showStarterSelection() {
     this.inDialog = true;
@@ -231,7 +269,27 @@ export default class WorldScene extends Phaser.Scene {
     );
 
     await this.dialogBox.show(
-      'This world is filled with digital creatures called CryptoMons. Choose your first partner!',
+      'The CryptoVerse is a digital world filled with creatures called CryptoMons.',
+      'Prof. Hashimoto'
+    );
+
+    await this.dialogBox.show(
+      "But lately, a dark organization called the Rug Pull Syndicate has been causing trouble...",
+      'Prof. Hashimoto'
+    );
+
+    await this.dialogBox.show(
+      "They're trying to manipulate CryptoMons for their own evil purposes!",
+      'Prof. Hashimoto'
+    );
+
+    await this.dialogBox.show(
+      "I need a brave trainer to help protect this world. Will you be that trainer?",
+      'Prof. Hashimoto'
+    );
+
+    await this.dialogBox.show(
+      'First, choose your partner CryptoMon! Each one has unique strengths.',
       'Prof. Hashimoto'
     );
 
@@ -247,19 +305,45 @@ export default class WorldScene extends Phaser.Scene {
     this.playerData.hasStarter = true;
 
     await this.dialogBox.show(
-      `Great choice! ${starter.name} will be a wonderful partner. Take these CryptoSpheres too!`,
+      `Excellent choice! ${starter.name} is a wonderful partner!`,
       'Prof. Hashimoto'
     );
 
+    await this.dialogBox.show(
+      "Take these CryptoSpheres to catch wild creatures, and some potions for healing.",
+      'Prof. Hashimoto'
+    );
+
+    await this.dialogBox.show(
+      "One more thing... I've been hearing strange reports from DeFi Forest.",
+      'Prof. Hashimoto'
+    );
+
+    await this.dialogBox.show(
+      "Talk to the Kid in town - he said he saw something suspicious there.",
+      'Prof. Hashimoto'
+    );
+
+    await this.dialogBox.show(
+      "Press Q to check your quest log anytime. Good luck, trainer!",
+      'Prof. Hashimoto'
+    );
+
+    this.questManager.completeStarter();
+    this.questManager.checkForNewQuests();
+    this.playerData.questData = this.questManager.serialize();
+    this._saveGame();
+
     this.inDialog = false;
+    this._showQuestNotifications();
   }
 
+  // === MAP GENERATION ===
+
   _generateWorldMap() {
-    // 80x80 world map with different areas
     const W = 80, H = 80;
     const map = Array.from({ length: H }, () => Array(W).fill(T.GRASS));
 
-    // Helper functions
     const fill = (x1, y1, x2, y2, tile) => {
       for (let y = y1; y <= y2 && y < H; y++)
         for (let x = x1; x <= x2 && x < W; x++)
@@ -267,101 +351,92 @@ export default class WorldScene extends Phaser.Scene {
     };
 
     const border = (x1, y1, x2, y2, tile) => {
-      for (let x = x1; x <= x2; x++) { if (y1 >= 0 && x >= 0 && x < W && y1 < H) map[y1][x] = tile; if (y2 >= 0 && x >= 0 && x < W && y2 < H) map[y2][x] = tile; }
-      for (let y = y1; y <= y2; y++) { if (y >= 0 && x1 >= 0 && x1 < W && y < H) map[y][x1] = tile; if (y >= 0 && x2 >= 0 && x2 < W && y < H) map[y][x2] = tile; }
+      for (let x = x1; x <= x2; x++) {
+        if (y1 >= 0 && x >= 0 && x < W && y1 < H) map[y1][x] = tile;
+        if (y2 >= 0 && x >= 0 && x < W && y2 < H) map[y2][x] = tile;
+      }
+      for (let y = y1; y <= y2; y++) {
+        if (y >= 0 && x1 >= 0 && x1 < W && y < H) map[y][x1] = tile;
+        if (y >= 0 && x2 >= 0 && x2 < W && y < H) map[y][x2] = tile;
+      }
     };
 
     // === SATOSHI TOWN (center-bottom: 15-40, 35-55) ===
     fill(15, 35, 40, 55, T.PATH);
     border(15, 35, 40, 55, T.TREE);
-    // Buildings in town
-    fill(18, 38, 22, 41, T.BUILDING); // Prof lab
-    fill(18, 42, 18, 42, T.LAB_FLOOR); // lab door
-    fill(26, 38, 30, 41, T.BUILDING); // PokeMart
-    fill(34, 38, 38, 41, T.BUILDING); // PokeCenter
-    fill(26, 48, 30, 51, T.BUILDING); // House 1
-    fill(34, 48, 38, 51, T.BUILDING); // House 2
-    // Town paths
+    fill(18, 38, 22, 41, T.BUILDING);
+    fill(18, 42, 18, 42, T.LAB_FLOOR);
+    fill(26, 38, 30, 41, T.BUILDING);
+    fill(34, 38, 38, 41, T.BUILDING);
+    fill(26, 48, 30, 51, T.BUILDING);
+    fill(34, 48, 38, 51, T.BUILDING);
     fill(20, 42, 38, 43, T.PATH);
     fill(25, 38, 25, 55, T.PATH);
     fill(33, 38, 33, 55, T.PATH);
-    // Signs
     map[43][19] = T.SIGN;
     map[43][27] = T.SIGN;
     map[43][35] = T.SIGN;
-    // Town exits
-    fill(27, 35, 29, 35, T.PATH); // North exit
-    fill(15, 44, 15, 46, T.PATH); // West exit
-    fill(40, 44, 40, 46, T.PATH); // East exit
-    fill(27, 55, 29, 55, T.PATH); // South exit
+    map[47][25] = T.SIGN; // Quest board sign
+    fill(27, 35, 29, 35, T.PATH);
+    fill(15, 44, 15, 46, T.PATH);
+    fill(40, 44, 40, 46, T.PATH);
+    fill(27, 55, 29, 55, T.PATH);
 
-    // === DEFI FOREST (left: 0-14, 25-55) ===
+    // === DEFI FOREST ===
     fill(0, 25, 14, 60, T.TREE);
     fill(2, 27, 12, 58, T.TALLGRASS);
-    // Forest paths
     fill(7, 27, 7, 58, T.PATH);
     fill(2, 35, 12, 35, T.PATH);
-    fill(2, 45, 14, 46, T.PATH); // Connect to town
+    fill(2, 45, 14, 46, T.PATH);
     fill(2, 50, 12, 50, T.PATH);
-    // Clearings
     fill(3, 30, 6, 33, T.GRASS);
     fill(9, 42, 12, 45, T.GRASS);
 
-    // === MEME MEADOW (right: 41-65, 35-60) ===
+    // === MEME MEADOW ===
     fill(41, 35, 65, 60, T.GRASS);
     fill(43, 37, 63, 58, T.TALLGRASS);
-    // Meadow paths
-    fill(40, 44, 50, 46, T.PATH); // Connect from town
+    fill(40, 44, 50, 46, T.PATH);
     fill(50, 37, 50, 58, T.PATH);
     fill(43, 47, 63, 47, T.PATH);
-    // Flowers (sand patches)
     fill(44, 39, 48, 41, T.SAND);
     fill(55, 50, 60, 54, T.SAND);
     fill(44, 53, 47, 56, T.SAND);
-    // Pond
     fill(57, 39, 62, 43, T.WATER);
 
-    // === AI LABS (top: 20-50, 5-25) ===
+    // === AI LABS ===
     fill(20, 5, 50, 25, T.LAB_FLOOR);
     border(20, 5, 50, 25, T.WALL);
-    // Internal walls
     fill(30, 5, 30, 15, T.WALL);
     fill(40, 10, 40, 25, T.WALL);
-    map[15][30] = T.LAB_FLOOR; // Door in wall
-    map[18][40] = T.LAB_FLOOR; // Door in wall
-    // Lab equipment (buildings as machines)
+    map[15][30] = T.LAB_FLOOR;
+    map[18][40] = T.LAB_FLOOR;
     fill(22, 7, 24, 9, T.BUILDING);
     fill(32, 7, 34, 9, T.BUILDING);
     fill(42, 12, 44, 14, T.BUILDING);
     fill(46, 18, 48, 20, T.BUILDING);
-    // Entrance
-    fill(27, 25, 29, 35, T.PATH); // Connects to town
-    fill(33, 25, 33, 25, T.LAB_FLOOR); // Extra entrance
+    fill(27, 25, 29, 35, T.PATH);
+    fill(33, 25, 33, 25, T.LAB_FLOOR);
 
-    // === CHAIN MOUNTAINS (top-right: 50-79, 0-34) ===
+    // === CHAIN MOUNTAINS ===
     fill(50, 0, 79, 34, T.MOUNTAIN);
-    // Mountain paths
     fill(50, 20, 65, 20, T.PATH);
     fill(55, 10, 55, 34, T.PATH);
     fill(65, 5, 65, 30, T.PATH);
     fill(55, 10, 75, 10, T.PATH);
-    // Caves (buildings)
     fill(58, 7, 62, 9, T.BUILDING);
     fill(70, 12, 74, 15, T.BUILDING);
-    // Connect to meadow
     fill(55, 34, 55, 37, T.PATH);
-    // Snow/ice areas
     fill(68, 2, 77, 8, T.SAND);
+    // Path to summit for final boss
+    fill(70, 5, 72, 10, T.PATH);
 
     // === WATER BORDERS ===
-    fill(0, 0, 79, 2, T.WATER); // Top
-    fill(0, 75, 79, 79, T.WATER); // Bottom
-    fill(0, 0, 1, 24, T.WATER); // Left top
-    fill(66, 35, 79, 60, T.WATER); // Right middle lake
-    // River through the map
+    fill(0, 0, 79, 2, T.WATER);
+    fill(0, 75, 79, 79, T.WATER);
+    fill(0, 0, 1, 24, T.WATER);
+    fill(66, 35, 79, 60, T.WATER);
     fill(0, 60, 40, 62, T.WATER);
     fill(27, 56, 29, 62, T.WATER);
-    // Bridge over river
     fill(27, 58, 29, 60, T.PATH);
 
     return map;
@@ -369,7 +444,6 @@ export default class WorldScene extends Phaser.Scene {
 
   _renderMap() {
     this.tileSprites = this.add.group();
-
     for (let y = 0; y < this.mapHeight; y++) {
       for (let x = 0; x < this.mapWidth; x++) {
         const tileId = this.mapData[y][x];
@@ -388,86 +462,142 @@ export default class WorldScene extends Phaser.Scene {
     const px = Math.floor(this.player.x / TILE_SIZE);
     const py = Math.floor(this.player.y / TILE_SIZE);
 
-    // Check surrounding tiles for collision
     for (let dy = -1; dy <= 1; dy++) {
       for (let dx = -1; dx <= 1; dx++) {
-        const tx = px + dx;
-        const ty = py + dy;
+        const tx = px + dx, ty = py + dy;
         if (tx < 0 || ty < 0 || tx >= this.mapWidth || ty >= this.mapHeight) continue;
-        const tile = this.mapData[ty][tx];
-        if (COLLISION_TILES.includes(tile)) {
-          const tileLeft = tx * TILE_SIZE;
-          const tileRight = tileLeft + TILE_SIZE;
-          const tileTop = ty * TILE_SIZE;
-          const tileBottom = tileTop + TILE_SIZE;
+        if (!COLLISION_TILES.includes(this.mapData[ty][tx])) continue;
 
-          const playerLeft = this.player.x - 10;
-          const playerRight = this.player.x + 10;
-          const playerTop = this.player.y - 10;
-          const playerBottom = this.player.y + 10;
+        const tileLeft = tx * TILE_SIZE;
+        const tileRight = tileLeft + TILE_SIZE;
+        const tileTop = ty * TILE_SIZE;
+        const tileBottom = tileTop + TILE_SIZE;
+        const pL = this.player.x - 10, pR = this.player.x + 10;
+        const pT = this.player.y - 10, pB = this.player.y + 10;
 
-          if (playerRight > tileLeft && playerLeft < tileRight &&
-              playerBottom > tileTop && playerTop < tileBottom) {
-            // Push player out
-            const overlapLeft = playerRight - tileLeft;
-            const overlapRight = tileRight - playerLeft;
-            const overlapTop = playerBottom - tileTop;
-            const overlapBottom = tileBottom - playerTop;
-
-            const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
-
-            if (minOverlap === overlapLeft) this.player.x -= overlapLeft;
-            else if (minOverlap === overlapRight) this.player.x += overlapRight;
-            else if (minOverlap === overlapTop) this.player.y -= overlapTop;
-            else this.player.y += overlapBottom;
-          }
+        if (pR > tileLeft && pL < tileRight && pB > tileTop && pT < tileBottom) {
+          const oL = pR - tileLeft, oR = tileRight - pL;
+          const oT = pB - tileTop, oB = tileBottom - pT;
+          const min = Math.min(oL, oR, oT, oB);
+          if (min === oL) this.player.x -= oL;
+          else if (min === oR) this.player.x += oR;
+          else if (min === oT) this.player.y -= oT;
+          else this.player.y += oB;
         }
       }
     }
   }
 
-  _createNPCs() {
-    const npcData = [
-      { x: 20, y: 44, name: 'Prof. Hashimoto', dialog: ['The world of CryptoMons is vast!', 'There are 8 types of creatures, each with strengths and weaknesses.', 'Explore and catch them all!'] },
-      { x: 28, y: 44, name: 'Nurse Joy', dialog: ['Welcome to the PokeCenter!', 'Your creatures have been fully healed!'] },
-      { x: 36, y: 44, name: 'Shopkeeper', dialog: ['Welcome to the PokeMart!', 'We sell CryptoSpheres and potions.'] },
-      { x: 28, y: 50, name: 'Kid', dialog: ['Did you know Pepeking is legendary?', 'Nobody has ever captured one!'] },
-      { x: 7, y: 36, name: 'DeFi Trainer', dialog: ['The DeFi Forest is full of DeFi-type creatures.', 'Watch out for Rugpullers!'] },
-      { x: 50, y: 48, name: 'Meme Lord', dialog: ['This meadow is where the meme creatures gather.', 'Diamond hands, my friend!'] },
-      { x: 35, y: 15, name: 'Dr. Neural', dialog: ['Welcome to AI Labs.', 'We study the mysterious AI-type creatures here.', 'Claudius is said to roam these halls...'] },
-      { x: 60, y: 20, name: 'Mountaineer', dialog: ['Chain Mountains is treacherous.', 'But the rarest Layer1 creatures live here.'] },
-    ];
+  // === NPCs ===
 
-    this.npcObjects = npcData.map(data => {
-      const npc = this.physics.add.staticSprite(
+  _createNPCs() {
+    // Create permanent/story NPCs from NPC_DATA
+    for (const [npcId, data] of Object.entries(NPC_DATA)) {
+      const sprite = this.physics.add.staticSprite(
         data.x * TILE_SIZE + TILE_SIZE / 2,
         data.y * TILE_SIZE + TILE_SIZE / 2,
-        'npc'
+        data.sprite || 'npc'
       ).setDepth(9);
-      npc.npcData = data;
-      this.npcs.add(npc);
-      return npc;
-    });
+      sprite.npcData = { ...data, isQuestNpc: false };
+      this.npcs.add(sprite);
+      this.npcObjects.push(sprite);
+
+      // Add name label above NPC
+      const label = this.add.text(
+        data.x * TILE_SIZE + TILE_SIZE / 2,
+        data.y * TILE_SIZE - 4,
+        data.name,
+        { fontSize: '7px', fontFamily: '"Press Start 2P", monospace', color: '#FFD700' }
+      ).setOrigin(0.5, 1).setDepth(9);
+      sprite.nameLabel = label;
+    }
   }
 
-  _checkNPCInteraction() {
+  _refreshQuestNPCs() {
+    // Remove old quest NPC sprites
+    this.questNpcObjects.forEach(obj => {
+      if (obj.nameLabel) obj.nameLabel.destroy();
+      if (obj.exclamation) obj.exclamation.destroy();
+      obj.destroy();
+    });
+    this.questNpcObjects = [];
+
+    // Add quest NPCs that should be visible
+    const visible = this.questManager.getVisibleQuestNpcs();
+    for (const data of visible) {
+      const sprite = this.physics.add.staticSprite(
+        data.x * TILE_SIZE + TILE_SIZE / 2,
+        data.y * TILE_SIZE + TILE_SIZE / 2,
+        data.sprite || 'npc'
+      ).setDepth(9);
+      sprite.npcData = {
+        id: data.id,
+        name: data.name,
+        x: data.x,
+        y: data.y,
+        sprite: data.sprite,
+        isQuestNpc: true,
+        trainerId: data.id,
+        dialogToFight: data.dialogToFight,
+      };
+      this.npcs.add(sprite);
+      this.questNpcObjects.push(sprite);
+
+      // Name label
+      const label = this.add.text(
+        data.x * TILE_SIZE + TILE_SIZE / 2,
+        data.y * TILE_SIZE - 4,
+        data.name,
+        { fontSize: '7px', fontFamily: '"Press Start 2P", monospace', color: '#FF4444' }
+      ).setOrigin(0.5, 1).setDepth(9);
+      sprite.nameLabel = label;
+
+      // Exclamation mark (!) above hostile NPCs
+      const excl = this.add.text(
+        data.x * TILE_SIZE + TILE_SIZE / 2,
+        data.y * TILE_SIZE - 16,
+        '!',
+        { fontSize: '14px', fontFamily: '"Press Start 2P", monospace', color: '#FF0000' }
+      ).setOrigin(0.5, 1).setDepth(10);
+      this.tweens.add({
+        targets: excl,
+        y: excl.y - 6,
+        duration: 600,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+      sprite.exclamation = excl;
+    }
+  }
+
+  // === INTERACTION ===
+
+  _checkInteraction() {
     const interactDist = 48;
     let closestNPC = null;
     let closestDist = Infinity;
 
-    this.npcObjects.forEach(npc => {
+    // Check all NPCs (permanent + quest)
+    const allNpcs = [...this.npcObjects, ...this.questNpcObjects];
+    for (const npc of allNpcs) {
       const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.x, npc.y);
       if (dist < interactDist && dist < closestDist) {
         closestDist = dist;
         closestNPC = npc;
       }
-    });
-
-    if (closestNPC) {
-      this._startNPCDialog(closestNPC.npcData);
     }
 
-    // Check sign interaction
+    if (closestNPC) {
+      if (closestNPC.npcData.isQuestNpc) {
+        this._startTrainerEncounter(closestNPC.npcData);
+      } else {
+        this._startNPCDialog(closestNPC.npcData);
+      }
+      return;
+    }
+
+    // Check signs
     const px = Math.floor(this.player.x / TILE_SIZE);
     const py = Math.floor(this.player.y / TILE_SIZE);
     for (let dy = -1; dy <= 1; dy++) {
@@ -484,18 +614,13 @@ export default class WorldScene extends Phaser.Scene {
         }
       }
     }
-
-    // Heal at PokeCenter location
-    if (closestNPC && closestNPC.npcData.name === 'Nurse Joy') {
-      this.playerData.party.forEach(c => { c.currentHp = c.stats.hp; });
-    }
   }
 
   _getSignText(x, y) {
-    // Signs near town exits
-    if (y === 43 && x === 19) return 'West: DeFi Forest';
-    if (y === 43 && x === 27) return 'Satoshi Town - Where it all begins';
-    if (y === 43 && x === 35) return 'East: Meme Meadow';
+    if (y === 43 && x === 19) return 'West: DeFi Forest - Beware of wild creatures!';
+    if (y === 43 && x === 27) return 'Satoshi Town - Where every journey begins';
+    if (y === 43 && x === 35) return 'East: Meme Meadow - Home of meme creatures';
+    if (y === 47 && x === 25) return 'North: AI Labs | Mountains via Labs';
     return 'PokeClaude World';
   }
 
@@ -507,11 +632,303 @@ export default class WorldScene extends Phaser.Scene {
 
   async _startNPCDialog(npcData) {
     this.inDialog = true;
-    for (const line of npcData.dialog) {
+
+    // Get quest-aware dialog
+    const dialogState = this.questManager.getDialogStateForNpc(npcData.id);
+    const dialogs = npcData.dialogByQuest || {};
+
+    // Find best matching dialog
+    let lines = dialogs._default || ['...'];
+
+    // Check states from most to least specific
+    for (const [key, value] of Object.entries(dialogState)) {
+      if (value && dialogs[key]) {
+        lines = dialogs[key];
+        break;
+      }
+    }
+
+    // Show all lines
+    for (const line of lines) {
       await this.dialogBox.show(line, npcData.name);
     }
+
+    // Healing at Nurse Joy
+    if (npcData.heals) {
+      this.playerData.party.forEach(c => { c.currentHp = c.stats.hp; });
+    }
+
+    // Quest hooks
+    const questUpdated = this.questManager.onTalkToNpc(npcData.id);
+    this.questManager.tryAutoComplete();
+    this.questManager.checkForNewQuests();
+
+    // Apply quest rewards if a quest just completed
+    this._applyPendingRewards();
+
+    // Save
+    this.playerData.questData = this.questManager.serialize();
+    this._saveGame();
+
     this.inDialog = false;
+
+    // Show quest notifications
+    this._showQuestNotifications();
+
+    // Refresh quest NPCs in case new ones appeared
+    this._refreshQuestNPCs();
+
+    // Check if this NPC has a trainer battle side quest
+    if (npcData.id === 'defi_trainer' && this.questManager.isQuestActive('defi_trainer_challenge')
+        && !this.questManager.isObjectiveDone('defi_trainer_challenge', 'beat_defi')) {
+      this.time.delayedCall(300, () => {
+        this._startTrainerBattle('defi_trainer');
+      });
+    }
   }
+
+  async _startTrainerEncounter(npcData) {
+    this.inDialog = true;
+
+    // Show pre-fight dialog
+    if (npcData.dialogToFight) {
+      for (const line of npcData.dialogToFight) {
+        await this.dialogBox.show(line, npcData.name);
+      }
+    }
+
+    this.inDialog = false;
+
+    // Start the trainer battle
+    this._startTrainerBattle(npcData.trainerId);
+  }
+
+  async _showTrainerPostBattleDialog(trainerId, won) {
+    const trainer = TRAINERS[trainerId];
+    if (!trainer) return;
+
+    this.inDialog = true;
+    const lines = won ? trainer.postWinDialog : trainer.postLoseDialog;
+    for (const line of lines) {
+      await this.dialogBox.show(line, trainer.name);
+    }
+
+    // Apply rewards if quest completed
+    this._applyPendingRewards();
+    this.playerData.questData = this.questManager.serialize();
+    this._saveGame();
+
+    this.inDialog = false;
+    this._showQuestNotifications();
+    this._refreshQuestNPCs();
+  }
+
+  _startTrainerBattle(trainerId) {
+    const trainer = TRAINERS[trainerId];
+    if (!trainer || this.playerData.party.length === 0) return;
+
+    // Create enemy party
+    const enemyParty = trainer.party.map(p => createCreatureInstance(p.id, p.level));
+    const enemyCreature = enemyParty[0];
+
+    this._battleTransition(enemyCreature, {
+      isWild: false,
+      trainerId: trainerId,
+      trainerName: trainer.name,
+      enemyParty: enemyParty,
+    });
+  }
+
+  // === QUEST REWARDS ===
+
+  _applyPendingRewards() {
+    // Check recently completed quests for rewards
+    const completed = this.questManager.completedQuests;
+    const applied = this.playerData._appliedRewards || [];
+
+    for (const questId of completed) {
+      if (applied.includes(questId)) continue;
+
+      const rewards = this.questManager.getRewards(questId);
+      if (rewards) {
+        if (rewards.coins) this.playerData.coins += rewards.coins;
+        if (rewards.items) {
+          for (const [item, count] of Object.entries(rewards.items)) {
+            this.playerData.inventory[item] = (this.playerData.inventory[item] || 0) + count;
+          }
+        }
+        applied.push(questId);
+      }
+    }
+
+    this.playerData._appliedRewards = applied;
+  }
+
+  // === QUEST LOG UI ===
+
+  _showQuestLog() {
+    this.questLogVisible = true;
+    this.player.setVelocity(0, 0);
+
+    const w = this.scale.width;
+    const h = this.scale.height;
+    const panelW = Math.min(600, w - 40);
+    const panelH = Math.min(500, h - 40);
+    const px = (w - panelW) / 2;
+    const py = (h - panelH) / 2;
+
+    this.questLogContainer = this.add.container(0, 0).setDepth(2000).setScrollFactor(0);
+
+    // Dim background
+    const dim = this.add.graphics();
+    dim.fillStyle(0x000000, 0.7);
+    dim.fillRect(0, 0, w, h);
+    this.questLogContainer.add(dim);
+
+    // Panel background
+    const panel = this.add.graphics();
+    panel.fillStyle(0x1a1a2e, 0.98);
+    panel.fillRoundedRect(px, py, panelW, panelH, 12);
+    panel.lineStyle(2, 0xF7931A, 0.8);
+    panel.strokeRoundedRect(px, py, panelW, panelH, 12);
+    this.questLogContainer.add(panel);
+
+    // Title
+    const title = this.add.text(w / 2, py + 20, 'QUEST LOG', {
+      fontSize: '16px', fontFamily: '"Press Start 2P", monospace', color: '#F7931A',
+    }).setOrigin(0.5, 0).setScrollFactor(0);
+    this.questLogContainer.add(title);
+
+    // Close hint
+    const hint = this.add.text(w / 2, py + panelH - 20, 'Press Q to close', {
+      fontSize: '8px', fontFamily: '"Press Start 2P", monospace', color: '#666',
+    }).setOrigin(0.5, 1).setScrollFactor(0);
+    this.questLogContainer.add(hint);
+
+    // Quest list
+    const quests = this.questManager.getAllActiveQuests();
+    let yOff = py + 50;
+
+    if (quests.length === 0) {
+      const noQuest = this.add.text(w / 2, yOff + 20, 'No active quests', {
+        fontSize: '10px', fontFamily: '"Press Start 2P", monospace', color: '#888',
+      }).setOrigin(0.5, 0).setScrollFactor(0);
+      this.questLogContainer.add(noQuest);
+    }
+
+    for (const quest of quests) {
+      if (yOff > py + panelH - 60) break;
+
+      // Quest title
+      const questTag = quest.isMain ? '[MAIN] ' : '[SIDE] ';
+      const tagColor = quest.isMain ? '#FF4444' : '#44FF44';
+      const qTitle = this.add.text(px + 20, yOff, questTag + quest.title, {
+        fontSize: '10px', fontFamily: '"Press Start 2P", monospace', color: tagColor,
+      }).setScrollFactor(0);
+      this.questLogContainer.add(qTitle);
+      yOff += 22;
+
+      // Description
+      const desc = this.add.text(px + 30, yOff, quest.description, {
+        fontSize: '7px', fontFamily: '"Press Start 2P", monospace', color: '#AAA',
+        wordWrap: { width: panelW - 60 },
+      }).setScrollFactor(0);
+      this.questLogContainer.add(desc);
+      yOff += desc.height + 10;
+
+      // Objectives
+      for (const obj of quest.objectives) {
+        if (yOff > py + panelH - 60) break;
+        const checkmark = obj.completed ? '[x]' : '[ ]';
+        const color = obj.completed ? '#44FF44' : '#FFFFFF';
+        const objText = this.add.text(px + 40, yOff, `${checkmark} ${obj.text}`, {
+          fontSize: '8px', fontFamily: '"Press Start 2P", monospace', color,
+        }).setScrollFactor(0);
+        this.questLogContainer.add(objText);
+        yOff += 18;
+      }
+
+      yOff += 12;
+    }
+
+    // Also show completed quests count
+    const completedCount = this.questManager.completedQuests.length;
+    if (completedCount > 0) {
+      const compText = this.add.text(px + 20, py + panelH - 40, `Completed: ${completedCount} quests`, {
+        fontSize: '7px', fontFamily: '"Press Start 2P", monospace', color: '#666',
+      }).setScrollFactor(0);
+      this.questLogContainer.add(compText);
+    }
+  }
+
+  _hideQuestLog() {
+    this.questLogVisible = false;
+    if (this.questLogContainer) {
+      this.questLogContainer.destroy();
+      this.questLogContainer = null;
+    }
+  }
+
+  // === QUEST NOTIFICATIONS ===
+
+  _showQuestNotifications() {
+    const notifications = this.questManager.popNotifications();
+    if (notifications.length === 0) return;
+
+    let delay = 0;
+    for (const note of notifications) {
+      this.time.delayedCall(delay, () => {
+        this._showNotificationBanner(note);
+      });
+      delay += 2500;
+    }
+  }
+
+  _showNotificationBanner(note) {
+    const w = this.scale.width;
+    const colors = {
+      quest_start: { bg: 0x1a4a2e, border: 0x44FF44, text: '#44FF44' },
+      quest_complete: { bg: 0x4a4a1a, border: 0xFFD700, text: '#FFD700' },
+      objective_complete: { bg: 0x1a2a4a, border: 0x4488FF, text: '#4488FF' },
+    };
+    const style = colors[note.type] || colors.objective_complete;
+
+    const container = this.add.container(w / 2, -50).setDepth(3000).setScrollFactor(0);
+
+    const bannerW = Math.min(500, w - 40);
+    const bg = this.add.graphics();
+    bg.fillStyle(style.bg, 0.95);
+    bg.fillRoundedRect(-bannerW / 2, -20, bannerW, 40, 8);
+    bg.lineStyle(2, style.border, 0.8);
+    bg.strokeRoundedRect(-bannerW / 2, -20, bannerW, 40, 8);
+    container.add(bg);
+
+    const text = this.add.text(0, 0, note.message, {
+      fontSize: '10px', fontFamily: '"Press Start 2P", monospace', color: style.text,
+    }).setOrigin(0.5);
+    container.add(text);
+
+    // Animate in
+    this.tweens.add({
+      targets: container,
+      y: 40,
+      duration: 400,
+      ease: 'Back.easeOut',
+    });
+
+    // Animate out
+    this.tweens.add({
+      targets: container,
+      y: -60,
+      alpha: 0,
+      duration: 400,
+      delay: 2000,
+      ease: 'Power2',
+      onComplete: () => container.destroy(),
+    });
+  }
+
+  // === AREAS ===
 
   _getAreaForPosition(x, y) {
     if (x >= 15 && x <= 40 && y >= 35 && y <= 55) return 'Satoshi Town';
@@ -546,27 +963,22 @@ export default class WorldScene extends Phaser.Scene {
     });
   }
 
+  // === ENCOUNTERS ===
+
   _checkRandomEncounter() {
     const px = Math.floor(this.player.x / TILE_SIZE);
     const py = Math.floor(this.player.y / TILE_SIZE);
-
     if (px < 0 || py < 0 || px >= this.mapWidth || py >= this.mapHeight) return;
-
-    const tile = this.mapData[py][px];
-    if (!ENCOUNTER_TILES.includes(tile)) return;
+    if (!ENCOUNTER_TILES.includes(this.mapData[py][px])) return;
     if (this.playerData.party.length === 0) return;
-
-    // ~8% encounter rate per check
     if (Math.random() > 0.08) return;
 
     this.encounterCooldown = 30;
 
-    // Determine wild creature based on area
     const area = this._getAreaForPosition(px, py);
     const possibleCreatures = getWildCreaturesForArea(area);
     const creatureId = Phaser.Utils.Array.GetRandom(possibleCreatures);
 
-    // Level based on area
     const levelRanges = {
       'Satoshi Town': [3, 7],
       'DeFi Forest': [5, 12],
@@ -581,53 +993,54 @@ export default class WorldScene extends Phaser.Scene {
     const wildCreature = createCreatureInstance(creatureId, level);
     if (!wildCreature) return;
 
-    // Battle transition effect
-    this._battleTransition(wildCreature);
+    this._battleTransition(wildCreature, { isWild: true });
   }
 
-  _battleTransition(wildCreature) {
-    // Flash effect
+  _battleTransition(creature, battleConfig = {}) {
     this.cameras.main.flash(300, 255, 255, 255);
 
     const overlay = this.add.graphics().setDepth(2000).setScrollFactor(0);
 
-    // Swipe transition
-    let progress = 0;
-    const anim = this.tweens.addCounter({
+    this.tweens.addCounter({
       from: 0,
       to: 1,
       duration: 600,
       ease: 'Sine.easeInOut',
       onUpdate: (tween) => {
-        progress = tween.getValue();
+        const progress = tween.getValue();
         overlay.clear();
         overlay.fillStyle(0x000000, 1);
-        // Horizontal bars closing in
         const barH = (this.scale.height / 2) * progress;
         overlay.fillRect(0, 0, this.scale.width, barH);
         overlay.fillRect(0, this.scale.height - barH, this.scale.width, barH);
       },
       onComplete: () => {
         overlay.destroy();
-        // Save position
         this.playerData.x = Math.floor(this.player.x / TILE_SIZE);
         this.playerData.y = Math.floor(this.player.y / TILE_SIZE);
+        this.playerData.questData = this.questManager.serialize();
+        this._saveGame();
 
-        // Start battle scene
         this.scene.sleep();
         this.scene.run('BattleScene', {
           playerCreature: this.playerData.party[0],
-          enemyCreature: wildCreature,
-          isWild: true,
+          enemyCreature: creature,
+          isWild: battleConfig.isWild !== false,
           playerData: this.playerData,
+          trainerId: battleConfig.trainerId || null,
+          trainerName: battleConfig.trainerName || null,
+          enemyParty: battleConfig.enemyParty || null,
         });
       },
     });
   }
 
+  // === SAVE ===
+
   _saveGame() {
     this.playerData.x = Math.floor(this.player.x / TILE_SIZE);
     this.playerData.y = Math.floor(this.player.y / TILE_SIZE);
+    this.playerData.questData = this.questManager.serialize();
     localStorage.setItem('pokeclaude_save', JSON.stringify(this.playerData));
   }
 }

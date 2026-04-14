@@ -10,6 +10,7 @@ export default class HUD {
     this.coinText = null;
     this.miniMapBg = null;
     this.miniMapDot = null;
+    this.questText = null;
     this.playerData = null;
 
     this._create();
@@ -58,6 +59,31 @@ export default class HUD {
     this.miniMapDot.setPosition(w - 44, 80);
     this.container.add(this.miniMapDot);
 
+    // Quest tracker (bottom right)
+    const questBg = this.scene.add.graphics();
+    questBg.fillStyle(0x000000, 0.6);
+    questBg.fillRoundedRect(w - 320, this.scene.scale.height - 60, 310, 50, 6);
+    this.container.add(questBg);
+    this.questBg = questBg;
+
+    this.questTitle = this.scene.add.text(w - 310, this.scene.scale.height - 55, '', {
+      fontSize: '8px', fontFamily: font, color: '#F7931A',
+    });
+    this.container.add(this.questTitle);
+
+    this.questObj = this.scene.add.text(w - 310, this.scene.scale.height - 38, '', {
+      fontSize: '7px', fontFamily: font, color: '#AAAAAA',
+      wordWrap: { width: 290 },
+    });
+    this.container.add(this.questObj);
+
+    // Controls hint (bottom center)
+    this.controlsHint = this.scene.add.text(w / 2, this.scene.scale.height - 10,
+      'SPACE: Interact | I: Inventory | Q: Quests', {
+        fontSize: '6px', fontFamily: font, color: '#555555',
+      }).setOrigin(0.5);
+    this.container.add(this.controlsHint);
+
     // Party HP bars (bottom left)
     this._createPartyBars();
   }
@@ -95,12 +121,10 @@ export default class HUD {
     if (!playerData) return;
     this.playerData = playerData;
 
-    // Update area name
     if (playerData.currentArea) {
       this.areaText.setText(playerData.currentArea);
     }
 
-    // Update coin balance
     if (playerData.coins !== undefined) {
       this.coinText.setText(`${playerData.coins} CC`);
     }
@@ -111,25 +135,20 @@ export default class HUD {
         if (i >= 6) return;
         const bar = this.partyBars[i];
         bar.container.setVisible(true);
-
         const hpPercent = creature.currentHp / creature.stats.hp;
         const barColor = hpPercent > 0.5 ? 0x00FF00 : hpPercent > 0.2 ? 0xFFFF00 : 0xFF0000;
         const barWidth = Math.max(0, Math.floor(98 * hpPercent));
-
         bar.fill.clear();
         bar.fill.fillStyle(barColor);
         bar.fill.fillRect(1, 1, barWidth, 10);
-
         bar.text.setText(`${creature.name} ${creature.currentHp}/${creature.stats.hp}`);
       });
-
-      // Hide unused bars
       for (let i = playerData.party.length; i < 6; i++) {
         this.partyBars[i].container.setVisible(false);
       }
     }
 
-    // Update minimap dot based on player position in world
+    // Minimap
     if (playerData.worldX !== undefined && playerData.worldY !== undefined) {
       const w = this.scene.scale.width;
       const mapX = w - 80 + (playerData.worldX / playerData.worldWidth) * 72;
@@ -138,6 +157,19 @@ export default class HUD {
         Phaser.Math.Clamp(mapX, w - 78, w - 10),
         Phaser.Math.Clamp(mapY, 46, 114)
       );
+    }
+
+    // Quest tracker
+    if (playerData.questSummary) {
+      this.questBg.setVisible(true);
+      this.questTitle.setVisible(true);
+      this.questObj.setVisible(true);
+      this.questTitle.setText(playerData.questSummary.title);
+      this.questObj.setText('> ' + playerData.questSummary.currentObjective);
+    } else {
+      this.questBg.setVisible(false);
+      this.questTitle.setVisible(false);
+      this.questObj.setVisible(false);
     }
   }
 

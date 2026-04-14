@@ -383,7 +383,7 @@ export function getCreaturesByType(type) {
 export function getWildCreaturesForArea(areaName) {
   const areaCreatures = {
     'Satoshi Town': ['satoshimp', 'axiebot', 'elonix'],
-    'DeFi Forest': ['vitapup', 'etherhound', 'sbfraud', 'rugpuller', 'impermanent_loss'],
+    'DeFi Forest': ['vitapup', 'etherhound', 'sbfraud', 'rugpuller'],
     'Meme Meadow': ['elonix', 'musketeer', 'rugpuller', 'boredchimp', 'trumpunk'],
     'AI Labs': ['vaporware', 'deepfaker', 'chainlinker', 'bandoracle'],
     'Chain Mountains': ['gavinite', 'czdragon', 'polkadroid', 'moneroach', 'zcashghost'],
