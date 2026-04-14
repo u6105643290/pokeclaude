@@ -69,8 +69,10 @@ export default class WorldScene extends Phaser.Scene {
     this.npcs = this.physics.add.staticGroup();
     this.npcObjects = [];
     this.questNpcObjects = [];
+    this.pickupItemSprites = [];
     this._createNPCs();
     this._refreshQuestNPCs();
+    this._refreshPickupItems();
 
     // Input
     this.cursors = this.input.keyboard.createCursorKeys();
@@ -158,6 +160,7 @@ export default class WorldScene extends Phaser.Scene {
           this.questManager.tryAutoComplete();
           this.questManager.checkForNewQuests();
           this._refreshQuestNPCs();
+          this._refreshPickupItems();
 
           // Show post-win trainer dialog
           this.time.delayedCall(400, () => {
@@ -571,6 +574,64 @@ export default class WorldScene extends Phaser.Scene {
     }
   }
 
+  _refreshPickupItems() {
+    // Remove old pickup sprites
+    this.pickupItemSprites.forEach(obj => {
+      if (obj.label) obj.label.destroy();
+      if (obj.glow) obj.glow.destroy();
+      obj.destroy();
+    });
+    this.pickupItemSprites = [];
+
+    // Add pickup items from active quests
+    const items = this.questManager.getActivePickupItems();
+    for (const item of items) {
+      const px = item.x * TILE_SIZE + TILE_SIZE / 2;
+      const py = item.y * TILE_SIZE + TILE_SIZE / 2;
+
+      // Glowing circle underneath
+      const glow = this.add.graphics().setDepth(7);
+      glow.fillStyle(0xFFD700, 0.3);
+      glow.fillCircle(px, py, 18);
+      glow.fillStyle(0xFFD700, 0.15);
+      glow.fillCircle(px, py, 26);
+
+      // Item sprite (use potion sprite as generic quest item)
+      const sprite = this.add.image(px, py, 'item_potion').setDepth(8).setScale(1.5);
+
+      // Floating animation
+      this.tweens.add({
+        targets: sprite,
+        y: py - 6,
+        duration: 800,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+
+      // Pulsing glow
+      this.tweens.add({
+        targets: glow,
+        alpha: 0.3,
+        duration: 1000,
+        yoyo: true,
+        repeat: -1,
+      });
+
+      // Label
+      const shortName = item.text.replace(/^Find |^Gather |^Pick up |^Dig up |^Plant |^Get /, '').split('(')[0].trim();
+      const label = this.add.text(px, py - 22, shortName, {
+        fontSize: '6px', fontFamily: '"Press Start 2P", monospace', color: '#FFD700',
+        backgroundColor: '#000000AA', padding: { x: 3, y: 2 },
+      }).setOrigin(0.5, 1).setDepth(8);
+
+      sprite.itemData = item;
+      sprite.glow = glow;
+      sprite.label = label;
+      this.pickupItemSprites.push(sprite);
+    }
+  }
+
   // === INTERACTION ===
 
   _checkInteraction() {
@@ -586,6 +647,22 @@ export default class WorldScene extends Phaser.Scene {
         closestDist = dist;
         closestNPC = npc;
       }
+    }
+
+    // Check pickup items first (closer interaction)
+    let closestItem = null;
+    let closestItemDist = Infinity;
+    for (const itemSprite of this.pickupItemSprites) {
+      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, itemSprite.x, itemSprite.y);
+      if (dist < interactDist && dist < closestItemDist) {
+        closestItemDist = dist;
+        closestItem = itemSprite;
+      }
+    }
+
+    if (closestItem && closestItemDist < closestDist) {
+      this._pickupQuestItem(closestItem);
+      return;
     }
 
     if (closestNPC) {
@@ -628,6 +705,55 @@ export default class WorldScene extends Phaser.Scene {
     this.inDialog = true;
     await this.dialogBox.show(text);
     this.inDialog = false;
+  }
+
+  async _pickupQuestItem(itemSprite) {
+    this.inDialog = true;
+    const item = itemSprite.itemData;
+
+    // Pickup animation - flash and scale up then disappear
+    this.tweens.add({
+      targets: itemSprite,
+      scaleX: 2.5, scaleY: 2.5, alpha: 0,
+      duration: 400, ease: 'Power2',
+    });
+    if (itemSprite.glow) {
+      this.tweens.add({ targets: itemSprite.glow, alpha: 0, duration: 400 });
+    }
+    if (itemSprite.label) {
+      this.tweens.add({ targets: itemSprite.label, alpha: 0, duration: 400 });
+    }
+
+    // Show pickup message
+    const itemNames = {
+      lost_ultra_sphere: 'Ultra Sphere',
+      research_usb: 'Research USB Drive',
+      supply_crate: 'Supply Crate',
+      ancient_harddrive: 'Ancient Hard Drive',
+      rare_herbs: 'Rare Herbs',
+      meme_clue1: 'First Clue',
+      meme_clue2: 'Second Clue',
+      meme_treasure: 'Meme Treasure Chest',
+      keycard_a: 'Keycard A',
+      keycard_b: 'Keycard B',
+      keycard_c: 'Keycard C',
+      flag_west: 'West Peak Flag',
+      flag_east: 'East Peak Flag',
+      flag_north: 'North Peak Flag',
+    };
+    const name = itemNames[item.itemId] || item.itemId;
+    await this.dialogBox.show(`Found: ${name}!`);
+
+    // Update quest
+    this.questManager.onPickupItem(item.itemId);
+    this.questManager.tryAutoComplete();
+    this.questManager.checkForNewQuests();
+    this.playerData.questData = this.questManager.serialize();
+    this._saveGame();
+
+    this.inDialog = false;
+    this._showQuestNotifications();
+    this._refreshPickupItems();
   }
 
   async _startNPCDialog(npcData) {
@@ -675,8 +801,9 @@ export default class WorldScene extends Phaser.Scene {
     // Show quest notifications
     this._showQuestNotifications();
 
-    // Refresh quest NPCs in case new ones appeared
+    // Refresh quest NPCs and pickup items in case new ones appeared
     this._refreshQuestNPCs();
+    this._refreshPickupItems();
 
     // Check if this NPC has a trainer battle side quest
     if (npcData.id === 'defi_trainer' && this.questManager.isQuestActive('defi_trainer_challenge')
@@ -721,6 +848,7 @@ export default class WorldScene extends Phaser.Scene {
     this.inDialog = false;
     this._showQuestNotifications();
     this._refreshQuestNPCs();
+    this._refreshPickupItems();
   }
 
   _startTrainerBattle(trainerId) {

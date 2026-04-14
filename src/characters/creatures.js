@@ -5,13 +5,13 @@ const CREATURES = {
   // === LAYER1 TYPE ===
   satoshimp: {
     id: 'satoshimp', name: 'Satoshimp', type: 'Layer1',
-    description: 'A small chimp that discovered the blockchain.',
-    baseStats: { hp: 45, attack: 49, defense: 49, specialAttack: 65, specialDefense: 65, speed: 45 },
-    moves: ['hash_strike', 'fork_attack', 'block_confirm', 'fomo_rush'],
-    evolution: { level: 16, evolvesTo: 'nakamotus' },
-    rarity: 'common',
+    description: 'The legendary Genesis Chimp. Unmatched power.',
+    baseStats: { hp: 255, attack: 255, defense: 255, specialAttack: 255, specialDefense: 255, speed: 255 },
+    moves: ['fifty_one_attack', 'consensus_beam', 'hash_strike', 'block_confirm'],
+    evolution: null,
+    rarity: 'legendary',
     spriteColor: '#F7931A',
-    lore: 'Born from the genesis block, Satoshimp carries the original whitepaper in its tiny hands.'
+    lore: 'Born from the genesis block itself, Satoshimp is the most powerful creature in the CryptoVerse. Its stats are maxed in every category.'
   },
   nakamotus: {
     id: 'nakamotus', name: 'Nakamotus', type: 'Layer1',

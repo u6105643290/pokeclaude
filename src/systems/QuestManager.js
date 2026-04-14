@@ -216,6 +216,56 @@ export default class QuestManager {
     }
   }
 
+  // When player picks up a quest item at a location
+  onPickupItem(itemId) {
+    for (const [questId, progress] of Object.entries(this.questProgress)) {
+      if (progress.state !== QUEST_STATES.ACTIVE) continue;
+
+      const quest = getQuestById(questId);
+      if (!quest) continue;
+
+      for (const obj of quest.objectives) {
+        if (progress.objectives[obj.id]) continue;
+        if (obj.type === 'pickup_item' && obj.itemId === itemId) {
+          if (this._previousObjectivesDone(quest, obj.id, progress)) {
+            this._completeObjective(questId, obj.id);
+          }
+        }
+      }
+    }
+  }
+
+  // Get all pickup items that should appear on the map right now
+  getActivePickupItems() {
+    const items = [];
+
+    for (const [questId, progress] of Object.entries(this.questProgress)) {
+      if (progress.state !== QUEST_STATES.ACTIVE) continue;
+
+      const quest = getQuestById(questId);
+      if (!quest) continue;
+
+      for (const obj of quest.objectives) {
+        if (progress.objectives[obj.id]) continue; // already picked up
+        if (obj.type !== 'pickup_item') continue;
+
+        // Only show if previous objectives are done
+        if (this._previousObjectivesDone(quest, obj.id, progress)) {
+          items.push({
+            itemId: obj.itemId,
+            x: obj.x,
+            y: obj.y,
+            questId,
+            objectiveId: obj.id,
+            text: obj.text,
+          });
+        }
+      }
+    }
+
+    return items;
+  }
+
   // When player catches a creature
   onCreatureCaught(creature) {
     this.totalCaught++;
@@ -333,7 +383,7 @@ export default class QuestManager {
       states['prologue_done'] = true;
     }
 
-    // Side quest states
+    // Side quest states - generically handle all side quests
     for (const quest of SIDE_QUESTS) {
       const progress = this.questProgress[quest.id];
       if (this.completedQuests.includes(quest.id)) {
@@ -346,6 +396,8 @@ export default class QuestManager {
           if (!progress.objectives.talk_shop) states['shopkeeper_delivery_start'] = true;
           if (progress.objectives.talk_shop && !progress.objectives.deliver) {
             states['shopkeeper_delivery_delivering'] = true;
+          }
+          if (progress.objectives.pickup_supplies) {
             states['shopkeeper_delivery_receive'] = true;
           }
           if (progress.objectives.deliver && !progress.objectives.return_shop) {
@@ -354,6 +406,44 @@ export default class QuestManager {
         }
         if (quest.id === 'defi_trainer_challenge') {
           states['defi_trainer_challenge_active'] = true;
+        }
+        // Stolen data quest
+        if (quest.id === 'stolen_data') {
+          if (progress.objectives.pickup_usb && !progress.objectives.return_usb) {
+            states['stolen_data_done'] = true; // has USB, returning
+          }
+        }
+        // Lab keycards
+        if (quest.id === 'lab_keycards') {
+          if (progress.objectives.pickup_key1 && progress.objectives.pickup_key2 &&
+              progress.objectives.pickup_key3 && !progress.objectives.return_keys) {
+            states['lab_keycards_done'] = true;
+          }
+        }
+        // Mountain flags
+        if (quest.id === 'mountain_flags') {
+          if (progress.objectives.plant_flag1 && progress.objectives.plant_flag2 &&
+              progress.objectives.plant_flag3 && !progress.objectives.return_mount) {
+            states['mountain_flags_done'] = true;
+          }
+        }
+        // Meme treasure
+        if (quest.id === 'meme_treasure') {
+          if (progress.objectives.pickup_treasure3 && !progress.objectives.return_meme) {
+            states['meme_treasure_done'] = true;
+          }
+        }
+        // Medicine run
+        if (quest.id === 'medicine_run') {
+          if (progress.objectives.pickup_herbs && !progress.objectives.return_herbs) {
+            states['medicine_run_done'] = true;
+          }
+        }
+        // Lost pokeball
+        if (quest.id === 'lost_pokeball') {
+          if (progress.objectives.pickup_sphere && !progress.objectives.return_sphere) {
+            // Prof has "return" dialog handled by default active state
+          }
         }
       }
     }

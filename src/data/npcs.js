@@ -13,6 +13,18 @@ export const NPC_DATA = {
         "I'm Professor Hashimoto, the leading CryptoMon researcher.",
         "Choose your first partner and begin your adventure!",
       ],
+      // Lost pokeball quest
+      lost_pokeball_active: [
+        "Oh no! I just realized I dropped my rare Ultra Sphere!",
+        "I was studying creatures in DeFi Forest near the clearing at coordinates (4, 31).",
+        "It must have fallen out of my bag there! Please go find it!",
+      ],
+      // Ancient artifact quest
+      ancient_artifact_done: [
+        "This hard drive... it contains data from the Genesis Era!",
+        "The first CryptoMon ever recorded is documented here!",
+        "This is the greatest discovery of my career! Thank you!",
+      ],
       // After prologue, before forest quest
       prologue_done: [
         "I've been hearing strange reports from DeFi Forest...",
@@ -85,6 +97,17 @@ export const NPC_DATA = {
         "Let me heal your CryptoMons...",
         "There you go! Your team is fully restored!",
       ],
+      medicine_run_active: [
+        "Oh, you came at the right time!",
+        "I'm running low on healing herbs...",
+        "There are rare medicinal herbs in DeFi Forest, near coordinates (10, 44).",
+        "Could you gather some for me? I'll make potions for you in return!",
+      ],
+      medicine_run_done: [
+        "These herbs are perfect! Thank you so much!",
+        "I've made a big batch of potions for you as thanks!",
+        "Your team is also fully healed!",
+      ],
       final_showdown_active: [
         "I can tell you're preparing for something big.",
         "Let me make sure your team is in perfect shape!",
@@ -105,15 +128,16 @@ export const NPC_DATA = {
         "Good luck on your adventure!",
       ],
       // Side quest: supply run
-      shopkeeper_delivery_start: [
+      shopkeeper_delivery_active: [
         "Oh, thank goodness you're here!",
-        "I need to get supplies to the Mountaineer up in Chain Mountains.",
-        "The path is too dangerous for me. Could you deliver them?",
+        "I packed supplies for the Mountaineer but I can't leave the shop!",
+        "The crate is behind the PokeMart at coordinates (30, 42).",
+        "Pick it up and deliver it to the Mountaineer in Chain Mountains!",
         "I'll pay you well for the trouble!",
       ],
       shopkeeper_delivery_delivering: [
-        "Have you delivered those supplies to the Mountaineer yet?",
-        "He's up in Chain Mountains - be careful on the way!",
+        "Have you picked up the supply crate behind my shop yet?",
+        "It's at (30, 42). Then take it to the Mountaineer!",
       ],
       shopkeeper_delivery_complete: [
         "You delivered the supplies? Wonderful!",
@@ -152,6 +176,16 @@ export const NPC_DATA = {
       forest_crisis_done: [
         "You beat those bad guys? Wow, you're so cool!",
         "I wanna be a trainer like you when I grow up!",
+      ],
+      ancient_artifact_active: [
+        "Hey! My grandpa told me a story about the Genesis Era!",
+        "He said there's an ancient hard drive buried in the snow!",
+        "It's up in Chain Mountains, in the snowy area around (72, 5)!",
+        "If you find it, Prof. Hashimoto would be so excited!",
+      ],
+      ghost_hunter_done: [
+        "Whoa!! A ghost creature?! That's so scary and cool!!",
+        "Can I pet it?! ...Oh, it went right through my hand!",
       ],
       kid_hero_active: [
         "You've saved DeFi Forest, Meme Meadow, AI Labs, AND the Mountains?!",
@@ -209,6 +243,17 @@ export const NPC_DATA = {
         "This is where the meme creatures gather.",
         "Diamond hands forever!",
       ],
+      meme_treasure_active: [
+        "Yo fren! I buried some treasure in the meadow!",
+        "Here's how to find it - follow the clues!",
+        "First clue is near the south flowers at (45, 54).",
+        "Each clue leads to the next! Good luck, fren!",
+      ],
+      meme_treasure_done: [
+        "You found the treasure! Absolute legend!",
+        "Diamond hands paid off! Here's your share!",
+        "You're an honorary Meme Lord now, fren!",
+      ],
       meme_mayhem_start: [
         "Dude, something's seriously wrong!",
         "The meme creatures are going crazy!",
@@ -244,6 +289,29 @@ export const NPC_DATA = {
         "Welcome to AI Labs.",
         "We study the mysterious AI-type creatures here.",
         "Claudius is said to roam these halls...",
+      ],
+      stolen_data_active: [
+        "Oh no! Someone stole my research USB drive!",
+        "I think the Rug Pull agents hid it in Meme Meadow...",
+        "Near the pond, around coordinates (58, 41).",
+        "That data contains years of AI research! Please retrieve it!",
+      ],
+      stolen_data_done: [
+        "My USB drive! Thank heavens!",
+        "All my research on Claudius is safe now!",
+        "You've saved years of work. Here, take this reward!",
+      ],
+      lab_keycards_active: [
+        "The security system is still compromised from the breach!",
+        "Three keycards were scattered during the hack.",
+        "Keycard A is in the west wing at (23, 8).",
+        "Keycard B is in the east wing at (43, 13).",
+        "Keycard C is in the south hall at (35, 22).",
+        "Please find them all so I can restore security!",
+      ],
+      lab_keycards_done: [
+        "All three keycards! The security system is back online!",
+        "The lab is finally fully secure. Thank you so much!",
       ],
       lab_breach_start: [
         "Thank goodness you're here!",
@@ -292,6 +360,22 @@ export const NPC_DATA = {
         "Chain Mountains is treacherous.",
         "But the rarest Layer1 creatures live here.",
         "Watch your step and keep your creatures close!",
+      ],
+      mountain_flags_active: [
+        "Hey! I've been wanting to mark the mountain peaks!",
+        "I've got three flags here. Can you plant them for me?",
+        "West peak is at (52, 12), east peak at (73, 7), north peak at (62, 3).",
+        "I'd do it myself but my knees aren't what they used to be!",
+      ],
+      mountain_flags_done: [
+        "All three flags planted! You can see them from miles away!",
+        "Now other trainers will know the safe routes!",
+        "You're a true mountaineer at heart!",
+      ],
+      shopkeeper_delivery_receive: [
+        "Oh! Supplies from the Shopkeeper? Perfect timing!",
+        "I was running low up here. Thanks for the delivery!",
+        "Tell the Shopkeeper I said thanks!",
       ],
       mountain_mystery_start: [
         "Hey, you! You look like a capable trainer.",
