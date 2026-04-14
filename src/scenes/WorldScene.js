@@ -300,7 +300,7 @@ export default class WorldScene extends Phaser.Scene {
     );
 
     const starterId = STARTERS[choice];
-    const starter = createCreatureInstance(starterId, 5);
+    const starter = createCreatureInstance(starterId, 100);
     this.playerData.party.push(starter);
     this.playerData.hasStarter = true;
 

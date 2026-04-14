@@ -153,6 +153,16 @@ export const NPC_DATA = {
         "You beat those bad guys? Wow, you're so cool!",
         "I wanna be a trainer like you when I grow up!",
       ],
+      kid_hero_active: [
+        "You've saved DeFi Forest, Meme Meadow, AI Labs, AND the Mountains?!",
+        "You're the greatest trainer in the whole CryptoVerse!",
+        "When I grow up, I'm gonna be just like you!",
+        "Here, I found this while you were gone. You should have it!",
+      ],
+      kid_hero_done: [
+        "I'm training hard every day to be like you!",
+        "One day I'll have my own CryptoMon team!",
+      ],
       final_showdown_done: [
         "You saved the whole CryptoVerse?!",
         "You're my hero!! Can I have your autograph?!",
@@ -258,6 +268,16 @@ export const NPC_DATA = {
         "The lab is secure again, thanks to you.",
         "Our research on AI creatures continues safely.",
         "If you ever encounter Claudius... treat it with kindness.",
+      ],
+      ai_researcher_active: [
+        "Oh, you're helping with my research?",
+        "I need an AI-type creature for my neural mapping study.",
+        "Catch one in the lab area and bring it to me!",
+      ],
+      ai_researcher_done: [
+        "Magnificent! This AI creature is perfect for my research!",
+        "The neural patterns are unlike anything I've seen!",
+        "Thank you so much! Here's your reward!",
       ],
     },
   },

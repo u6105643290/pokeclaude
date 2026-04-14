@@ -146,6 +146,110 @@ export const SIDE_QUESTS = [
     ],
     rewards: { coins: 600, items: { revives: 2, potions: 5 } },
   },
+  {
+    id: 'catch_10',
+    title: 'Seasoned Collector',
+    description: 'Catch 10 CryptoMons to prove your skills as a collector.',
+    unlockAfter: 'forest_crisis',
+    objectives: [
+      { id: 'catch10', text: 'Catch 10 CryptoMons', type: 'catch_count', count: 10 },
+    ],
+    rewards: { coins: 500, items: { ultraSpheres: 5 } },
+  },
+  {
+    id: 'catch_20',
+    title: 'Master Collector',
+    description: 'Catch 20 CryptoMons. Gotta catch em all!',
+    unlockAfter: 'meme_mayhem',
+    objectives: [
+      { id: 'catch20', text: 'Catch 20 CryptoMons', type: 'catch_count', count: 20 },
+    ],
+    rewards: { coins: 1500, items: { masterSpheres: 1 } },
+  },
+  {
+    id: 'all_types',
+    title: 'Type Master',
+    description: 'Collect creatures of all 8 types to master the CryptoVerse.',
+    unlockAfter: 'lab_breach',
+    objectives: [
+      { id: 'types8', text: 'Own creatures of all 8 types', type: 'own_types', count: 8 },
+    ],
+    rewards: { coins: 2000, items: { masterSpheres: 1, ultraSpheres: 5 } },
+  },
+  {
+    id: 'evolve_3',
+    title: 'Evolution Expert',
+    description: 'Evolve 3 different CryptoMons.',
+    unlockAfter: 'meme_mayhem',
+    objectives: [
+      { id: 'evolve3', text: 'Evolve 3 CryptoMons', type: 'evolve_count', count: 3 },
+    ],
+    rewards: { coins: 1000, items: { superPotions: 10 } },
+  },
+  {
+    id: 'nurse_checkup',
+    title: 'Health Checkup',
+    description: 'Visit Nurse Joy for a checkup after your first battle.',
+    unlockAfter: 'prologue',
+    objectives: [
+      { id: 'heal_nurse', text: 'Talk to Nurse Joy to heal your team', type: 'talk', npcId: 'nurse_joy' },
+    ],
+    rewards: { coins: 50, items: { potions: 3 } },
+  },
+  {
+    id: 'explore_all',
+    title: 'World Explorer',
+    description: 'Visit every region of the CryptoVerse.',
+    unlockAfter: 'forest_crisis',
+    objectives: [
+      { id: 'visit_forest', text: 'Visit DeFi Forest', type: 'enter_area', area: 'DeFi Forest' },
+      { id: 'visit_meadow', text: 'Visit Meme Meadow', type: 'enter_area', area: 'Meme Meadow' },
+      { id: 'visit_labs', text: 'Visit AI Labs', type: 'enter_area', area: 'AI Labs' },
+      { id: 'visit_mountains', text: 'Visit Chain Mountains', type: 'enter_area', area: 'Chain Mountains' },
+    ],
+    rewards: { coins: 800, items: { premiumSpheres: 5, revives: 3 } },
+  },
+  {
+    id: 'ghost_hunter',
+    title: 'Ghost Hunter',
+    description: 'The mountains hold ghostly Privacy-type creatures. Catch one!',
+    unlockAfter: 'mountain_mystery',
+    objectives: [
+      { id: 'catch_privacy', text: 'Catch a Privacy-type creature', type: 'catch_type', creatureType: 'Privacy' },
+    ],
+    rewards: { coins: 600, items: { ultraSpheres: 3 } },
+  },
+  {
+    id: 'oracle_seeker',
+    title: 'Seek the Oracle',
+    description: 'Oracle creatures can see the future. Catch one to gain their wisdom.',
+    unlockAfter: 'lab_breach',
+    objectives: [
+      { id: 'catch_oracle', text: 'Catch an Oracle-type creature', type: 'catch_type', creatureType: 'Oracle' },
+    ],
+    rewards: { coins: 600, items: { superPotions: 5 } },
+  },
+  {
+    id: 'ai_researcher',
+    title: 'AI Research Assistant',
+    description: 'Dr. Neural needs an AI creature for research. Catch one in the labs!',
+    unlockAfter: 'lab_breach',
+    objectives: [
+      { id: 'catch_ai', text: 'Catch an AI-type creature', type: 'catch_type', creatureType: 'AI' },
+      { id: 'show_neural', text: 'Show it to Dr. Neural', type: 'talk', npcId: 'dr_neural' },
+    ],
+    rewards: { coins: 900, items: { ultraSpheres: 2, superPotions: 5 } },
+  },
+  {
+    id: 'kid_hero',
+    title: 'Hometown Hero',
+    description: 'The Kid looks up to you. Visit him after saving all the regions.',
+    unlockAfter: 'mountain_mystery',
+    objectives: [
+      { id: 'talk_kid_hero', text: 'Visit the Kid in Satoshi Town', type: 'talk', npcId: 'kid' },
+    ],
+    rewards: { coins: 300, items: { potions: 10 } },
+  },
 ];
 
 // Trainer definitions for story battles
