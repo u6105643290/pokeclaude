@@ -280,6 +280,18 @@ const CREATURES = {
     lore: 'Claudius appeared when AI reached a new threshold of understanding. It is helpful, harmless, and honest.'
   },
 
+  // === SHINY SECRET - Shiny Claudius (GOD-TIER) ===
+  shiny_claudius: {
+    id: 'shiny_claudius', name: '✦ Shiny Claudius ✦', type: 'AI',
+    description: 'A mythical shiny variant of Claudius. Its power transcends all known limits.',
+    baseStats: { hp: 255, attack: 255, defense: 255, specialAttack: 255, specialDefense: 255, speed: 255 },
+    moves: ['prompt_inject', 'neural_blast', 'deep_learn', 'fifty_one_attack'],
+    evolution: null,
+    rarity: 'legendary',
+    spriteColor: '#FF00FF',
+    lore: 'Found only in the Secret Room beneath the waters. Shiny Claudius radiates prismatic AI energy. It is said to be the most powerful creature in all of existence.'
+  },
+
   // === PRIVACY ===
   zcashghost: {
     id: 'zcashghost', name: 'Zcashghost', type: 'Privacy',

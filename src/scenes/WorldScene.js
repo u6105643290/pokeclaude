@@ -98,6 +98,12 @@ export default class WorldScene extends Phaser.Scene {
     this.stepCount = 0;
     this.currentArea = this._getAreaForPosition(startX, startY);
     this.questLogVisible = false;
+    this.inSecretRoom = false;
+    this.secretRoomContainer = null;
+
+    // Secret water tile coordinates (in the right lake)
+    this.SECRET_TILE_X = 70;
+    this.SECRET_TILE_Y = 45;
 
     // If new game, show intro
     if (this.initData.newGame && !this.playerData.hasStarter) {
@@ -216,6 +222,12 @@ export default class WorldScene extends Phaser.Scene {
         this._showAreaTransition(newArea);
         this.questManager.onEnterArea(newArea);
         this.questManager.tryAutoComplete();
+      }
+
+      // Check secret room entrance
+      if (!this.inSecretRoom && tileX === this.SECRET_TILE_X && tileY === this.SECRET_TILE_Y) {
+        this._enterSecretRoom();
+        return;
       }
 
       if (this.stepCount % 8 === 0 && this.encounterCooldown <= 0) {
@@ -470,6 +482,8 @@ export default class WorldScene extends Phaser.Scene {
         const tx = px + dx, ty = py + dy;
         if (tx < 0 || ty < 0 || tx >= this.mapWidth || ty >= this.mapHeight) continue;
         if (!COLLISION_TILES.includes(this.mapData[ty][tx])) continue;
+        // Secret room entrance - allow walking through this water tile
+        if (tx === this.SECRET_TILE_X && ty === this.SECRET_TILE_Y) continue;
 
         const tileLeft = tx * TILE_SIZE;
         const tileRight = tileLeft + TILE_SIZE;
@@ -1160,6 +1174,253 @@ export default class WorldScene extends Phaser.Scene {
           enemyParty: battleConfig.enemyParty || null,
         });
       },
+    });
+  }
+
+  // === SECRET ROOM ===
+
+  async _enterSecretRoom() {
+    if (this.inSecretRoom || this.inDialog) return;
+    this.inSecretRoom = true;
+    this.player.setVelocity(0, 0);
+
+    // Dramatic flash + fade
+    this.cameras.main.flash(500, 0, 200, 255);
+    this.cameras.main.fadeOut(600, 0, 0, 50);
+
+    await new Promise(r => this.time.delayedCall(700, r));
+
+    // Save the player's real position
+    this._secretReturnX = this.player.x;
+    this._secretReturnY = this.player.y;
+
+    // Create the secret room overlay
+    const w = this.scale.width;
+    const h = this.scale.height;
+
+    this.secretRoomContainer = this.add.container(0, 0).setDepth(5000).setScrollFactor(0);
+
+    // Dark mystical background
+    const bg = this.add.graphics();
+    bg.fillGradientStyle(0x0a001a, 0x0a001a, 0x1a003a, 0x1a003a);
+    bg.fillRect(0, 0, w, h);
+    this.secretRoomContainer.add(bg);
+
+    // Animated stars/particles
+    for (let i = 0; i < 40; i++) {
+      const star = this.add.graphics();
+      const sx = Math.random() * w;
+      const sy = Math.random() * h;
+      const size = 1 + Math.random() * 2;
+      const colors = [0xFF00FF, 0x00FFFF, 0xFFFF00, 0xFF88FF, 0x88FFFF];
+      star.fillStyle(colors[Math.floor(Math.random() * colors.length)], 0.8);
+      star.fillCircle(sx, sy, size);
+      this.secretRoomContainer.add(star);
+      this.tweens.add({
+        targets: star,
+        alpha: 0.2,
+        duration: 500 + Math.random() * 1500,
+        yoyo: true,
+        repeat: -1,
+      });
+    }
+
+    // Glowing platform in center
+    const platform = this.add.graphics();
+    platform.fillStyle(0xFF00FF, 0.1);
+    platform.fillCircle(w / 2, h / 2 + 30, 120);
+    platform.fillStyle(0xFF00FF, 0.2);
+    platform.fillCircle(w / 2, h / 2 + 30, 80);
+    platform.fillStyle(0xFF00FF, 0.05);
+    platform.fillCircle(w / 2, h / 2 + 30, 160);
+    this.secretRoomContainer.add(platform);
+    this.tweens.add({
+      targets: platform,
+      alpha: 0.5,
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+    });
+
+    // Title text
+    const title = this.add.text(w / 2, 40, '✦ SECRET ROOM ✦', {
+      fontSize: '20px', fontFamily: '"Press Start 2P", monospace', color: '#FF00FF',
+    }).setOrigin(0.5);
+    this.secretRoomContainer.add(title);
+    this.tweens.add({
+      targets: title,
+      alpha: 0.5,
+      duration: 1000,
+      yoyo: true,
+      repeat: -1,
+    });
+
+    // Check if shiny already claimed
+    const shinyClaimed = this.playerData._shinyClaimed;
+
+    if (!shinyClaimed) {
+      // Shiny creature sprite (floating)
+      const creatureSprite = this.add.image(w / 2, h / 2 - 10, 'claudius_front').setScale(3);
+      if (!this.textures.exists('claudius_front')) {
+        // Fallback: draw a glowing circle
+        const fallback = this.add.graphics();
+        fallback.fillStyle(0xFF00FF, 1);
+        fallback.fillCircle(w / 2, h / 2 - 10, 30);
+        fallback.fillStyle(0xFFFFFF, 0.5);
+        fallback.fillCircle(w / 2, h / 2 - 10, 20);
+        this.secretRoomContainer.add(fallback);
+        this.tweens.add({
+          targets: fallback, y: -8, duration: 1000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        });
+        creatureSprite.destroy();
+      } else {
+        this.secretRoomContainer.add(creatureSprite);
+        this.tweens.add({
+          targets: creatureSprite, y: h / 2 - 20, duration: 1000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        });
+        // Rainbow tint cycle
+        this.tweens.addCounter({
+          from: 0, to: 360, duration: 3000, repeat: -1,
+          onUpdate: (tween) => {
+            const hue = tween.getValue();
+            const color = Phaser.Display.Color.HSLToColor(hue / 360, 1, 0.7);
+            creatureSprite.setTint(color.color);
+          },
+        });
+      }
+
+      // Label
+      const label = this.add.text(w / 2, h / 2 + 50, '✦ Shiny Claudius ✦', {
+        fontSize: '12px', fontFamily: '"Press Start 2P", monospace', color: '#FF88FF',
+      }).setOrigin(0.5);
+      this.secretRoomContainer.add(label);
+
+      const sublabel = this.add.text(w / 2, h / 2 + 70, 'Lv.100 | ALL STATS MAX | LEGENDARY', {
+        fontSize: '7px', fontFamily: '"Press Start 2P", monospace', color: '#CC66CC',
+      }).setOrigin(0.5);
+      this.secretRoomContainer.add(sublabel);
+
+      // Claim button prompt
+      const claimText = this.add.text(w / 2, h / 2 + 110, '[ Press SPACE to claim! ]', {
+        fontSize: '10px', fontFamily: '"Press Start 2P", monospace', color: '#FFFFFF',
+      }).setOrigin(0.5);
+      this.secretRoomContainer.add(claimText);
+      this.tweens.add({
+        targets: claimText,
+        alpha: 0.3,
+        duration: 600,
+        yoyo: true,
+        repeat: -1,
+      });
+    } else {
+      // Already claimed
+      const emptyText = this.add.text(w / 2, h / 2, 'The pedestal is empty.\nYou already claimed\nthe Shiny Claudius.', {
+        fontSize: '10px', fontFamily: '"Press Start 2P", monospace', color: '#886688',
+        align: 'center', lineSpacing: 10,
+      }).setOrigin(0.5);
+      this.secretRoomContainer.add(emptyText);
+    }
+
+    // Exit hint
+    const exitText = this.add.text(w / 2, h - 40, 'Press X or ESC to leave', {
+      fontSize: '8px', fontFamily: '"Press Start 2P", monospace', color: '#666688',
+    }).setOrigin(0.5);
+    this.secretRoomContainer.add(exitText);
+
+    // Fade in
+    this.cameras.main.fadeIn(500, 0, 0, 50);
+
+    // Input handlers for secret room
+    this._secretSpaceHandler = () => {
+      if (!shinyClaimed && this.inSecretRoom) {
+        this._claimShinyCreature();
+      }
+    };
+    this._secretExitHandler = () => {
+      if (this.inSecretRoom) {
+        this._exitSecretRoom();
+      }
+    };
+
+    this.input.keyboard.on('keydown-SPACE', this._secretSpaceHandler);
+    this.input.keyboard.on('keydown-X', this._secretExitHandler);
+    this.input.keyboard.on('keydown-ESC', this._secretExitHandler);
+  }
+
+  async _claimShinyCreature() {
+    // Remove handlers to prevent double claim
+    this.input.keyboard.off('keydown-SPACE', this._secretSpaceHandler);
+
+    // Flash!
+    this.cameras.main.flash(1000, 255, 0, 255);
+
+    // Create the shiny creature
+    const shiny = createCreatureInstance('shiny_claudius', 100);
+    if (shiny) {
+      if (this.playerData.party.length < 6) {
+        this.playerData.party.push(shiny);
+      } else {
+        this.playerData.box = this.playerData.box || [];
+        this.playerData.box.push(shiny);
+      }
+    }
+
+    this.playerData._shinyClaimed = true;
+    this._saveGame();
+
+    // Show claim messages using a temporary text (not dialog box, since we're in overlay)
+    const w = this.scale.width;
+    const h = this.scale.height;
+
+    const msg1 = this.add.text(w / 2, h / 2 - 50, '✦ You obtained Shiny Claudius! ✦', {
+      fontSize: '12px', fontFamily: '"Press Start 2P", monospace', color: '#FF00FF',
+      backgroundColor: '#000000', padding: { x: 10, y: 8 },
+    }).setOrigin(0.5).setDepth(5001).setScrollFactor(0).setAlpha(0);
+
+    const msg2 = this.add.text(w / 2, h / 2, 'The most powerful creature\nin the CryptoVerse is yours!', {
+      fontSize: '9px', fontFamily: '"Press Start 2P", monospace', color: '#FFAAFF',
+      align: 'center', lineSpacing: 8,
+      backgroundColor: '#000000', padding: { x: 10, y: 8 },
+    }).setOrigin(0.5).setDepth(5001).setScrollFactor(0).setAlpha(0);
+
+    const msg3 = this.add.text(w / 2, h / 2 + 60, 'Press SPACE to continue', {
+      fontSize: '8px', fontFamily: '"Press Start 2P", monospace', color: '#FFFFFF',
+    }).setOrigin(0.5).setDepth(5001).setScrollFactor(0).setAlpha(0);
+
+    this.tweens.add({ targets: msg1, alpha: 1, duration: 500, delay: 300 });
+    this.tweens.add({ targets: msg2, alpha: 1, duration: 500, delay: 800 });
+    this.tweens.add({
+      targets: msg3, alpha: 1, duration: 500, delay: 1500,
+      onComplete: () => {
+        this.input.keyboard.once('keydown-SPACE', () => {
+          msg1.destroy();
+          msg2.destroy();
+          msg3.destroy();
+          this._exitSecretRoom();
+        });
+      },
+    });
+  }
+
+  _exitSecretRoom() {
+    this.input.keyboard.off('keydown-SPACE', this._secretSpaceHandler);
+    this.input.keyboard.off('keydown-X', this._secretExitHandler);
+    this.input.keyboard.off('keydown-ESC', this._secretExitHandler);
+
+    this.cameras.main.fadeOut(400, 0, 0, 50);
+
+    this.time.delayedCall(500, () => {
+      if (this.secretRoomContainer) {
+        this.secretRoomContainer.destroy();
+        this.secretRoomContainer = null;
+      }
+
+      // Move player back to safe position (next to the water)
+      this.player.x = this._secretReturnX - TILE_SIZE * 2;
+      this.player.y = this._secretReturnY;
+
+      this.inSecretRoom = false;
+      this.cameras.main.fadeIn(400, 0, 0, 0);
     });
   }
 
