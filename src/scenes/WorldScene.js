@@ -101,9 +101,9 @@ export default class WorldScene extends Phaser.Scene {
     this.inSecretRoom = false;
     this.secretRoomContainer = null;
 
-    // Secret water tile coordinates (in the right lake)
-    this.SECRET_TILE_X = 70;
-    this.SECRET_TILE_Y = 45;
+    // Secret water tile coordinates (small lake south of Satoshi Town)
+    this.SECRET_TILE_X = 28;
+    this.SECRET_TILE_Y = 57;
 
     // If new game, show intro
     if (this.initData.newGame && !this.playerData.hasStarter) {
